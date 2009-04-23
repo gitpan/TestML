@@ -1,0 +1,26 @@
+bin/testml-pl
+Changes
+inc/Module/Install.pm
+inc/Module/Install/Base.pm
+inc/Module/Install/Can.pm
+inc/Module/Install/Fetch.pm
+inc/Module/Install/Makefile.pm
+inc/Module/Install/Metadata.pm
+inc/Module/Install/Win32.pm
+inc/Module/Install/WriteAll.pm
+lib/TestML.pm
+lib/TestML/Base.pm
+lib/TestML/BridgeBase.pm
+lib/TestML/CLI.pm
+lib/TestML/Parser.pm
+lib/TestML/Runner.pm
+lib/TestML/Spec.pm
+Makefile.PL
+MANIFEST			This list of files
+META.yml
+README
+t/basic.t
+t/testml.pl
+t/testml/basic.tml
+t/testml/README
+t/TestMLTestBridge.pm
