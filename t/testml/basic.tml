@@ -1,18 +1,14 @@
 # This is the TestML spec version 
-testml: 0.0.1
+%TestML: 1.0
+%Title:  A Basic TestML File
+%Plan:   10
 
-title: A Basic TestML File
-tests: 10
-
-data_syntax: testml
-testml_test_marker: ===
-testml_data_marker: ---
-
-foo.list.join(' - ')        == bar
-foo.list.reverse.item       == baz
-foo.list.sort.item          == baz.list.sort.item
-foo.list.item               == foo
-foo.my_thing                == bar
+# TODO First statement parses wrong!
+foo.List().Join(' - ')          == bar;
+foo.List().Reverse().Item()     == baz;
+foo.List().Sort().Item()        == baz.List().Sort().Item();
+foo.List().Item()               == foo;
+foo.my_thing()                  == bar;
 
 
 === Test One

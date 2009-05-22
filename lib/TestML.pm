@@ -1,25 +1,65 @@
+# To Do:
+#
 package TestML;
 use strict;
 use warnings;
 use 5.006001;
 
-$TestML::VERSION = '0.01';
+$TestML::VERSION = '0.02';
+
+sub import {
+    my $run;
+    my $bridge;
+
+    if ($_[1] eq '-base') {
+        goto &TestML::Base::import;
+    }
+
+    my $pkg = shift;
+    while (@_) {
+        my $option = shift(@_);
+        my $value = (@_ and $_[0] !~ /^-/) ? shift(@_) : '';
+        if ($option eq '-run') {
+            $run = $value || 'TestML::Runner::TAP';
+        }
+        elsif ($option eq '-bridge') {
+            $bridge = $value;
+        }
+        else {
+            die "Unknown option '$option'";
+        }
+    }
+
+    sub INIT {
+        no warnings;
+        if ($run and $bridge) {
+            eval "require $run; 1" or die $@;
+            $run->new(
+                document => \ *main::DATA,
+                bridge => $bridge,
+            )->run();
+        }
+    }
+}
 
 1;
 
+=encoding utf-8
+
 =head1 NAME
 
-TestML - Generic Software Testing Meta Language
+TestML - A Generic Software Testing Meta Language
 
 =head1 SYNOPSIS
 
-    testml: 0.0.1
-    title: Tests for AcmeEncode
-    tests: 3
+    # file t/testml/encode.tml
+    %TestML: 1.0
 
-    text.apply_rot13  == rot13
-    text.apply_md5    == md5
+    %Title: Tests for AcmeEncode
+    %Plan: 3
 
+    text.apply_rot13()  == rot13;
+    text.apply_md5()    == md5;
 
     === Encode some poetry
     --- text
@@ -34,11 +74,20 @@ TestML - Generic Software Testing Meta Language
     --- text: soopersekrit
     --- md5: 64002c26dcc62c1d6d0f1cb908de1435
 
-This TestML specification defines 2 tests, and defines 2 data blocks.
-The first block has 3 data entries, but the second one has only 2.
-Therefore the rot13 test applies only to the first block, while the the
-md5 test applies to both. This results in a total of 3 tests, which is
-specified in the test.
+This TestML document defines 2 assertions, and defines 2 data blocks.
+The first block has 3 data points, but the second one has only 2.
+Therefore the rot13 assertion applies only to the first block, while the
+the md5 assertion applies to both. This results in a total of 3 tests,
+which is specified in the meta Plan statement in the document.
+
+To run this test you would have a normal test file that looks like this:
+
+    use TestML::Runner::TAP;
+
+    TestML::Runner::TAP->new(
+        document => 't/testml/encode.tml',
+        bridge => 'AcmeEncode::Bridge',
+    )->run();
 
 The apply_* functions are defined in a bridge class that is specified
 outside this test.
@@ -57,7 +106,9 @@ data must pass through to produce the expected results. You use a bridge
 class to write the functions that pass the data through your
 application.
 
-This is an early release. More doc coming soon.
+=head1 SEE ALSO
+
+See L<http://www.testml.org/> for more information on TestML.
 
 =head1 AUTHOR
 

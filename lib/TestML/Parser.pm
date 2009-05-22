@@ -1,173 +1,172 @@
 package TestML::Parser;
 use strict;
 use warnings;
+use utf8;
 use TestML::Base -base;
+use TestML::Parser::Grammar;
 
-use TestML::Spec;
-
-field 'spec';
 field 'stream';
+field 'grammar', -init => 'TestML::Parser::Grammar->grammar()';
+field 'start_token';
+field 'position' => 0;
+field 'receiver';
+field 'arguments' => [];
+field 'stack' => [];
+
+sub parse {
+    my $self = shift;
+    $self->match($self->start_token);
+    if ($self->position < length($self->stream)) {
+        die "Parse document failed for some reason";
+    }
+}
+
+sub match {
+    my $self = shift;
+    my $topic = shift or die "No topic passed to match";
+
+    my $not = ($topic =~ s/^!//) ? 1 : 0;
+
+    my $state = undef;
+    if (not ref($topic) and $topic =~ /^\w+$/) {
+        $state = $topic;
+
+        push @{$self->stack}, $state;
+
+        if (not defined $self->grammar->{$topic}) {
+            die "\n\n*** No grammar support for '$topic'\n\n";
+            return 0;
+        }
+        
+        $topic = $self->grammar->{$topic};
+        $self->callback('try', $state);
+    }
+
+    my $method;
+    my $times = '1';
+    if (not ref $topic and $topic =~ /^\//) {
+        $method = 'match_regexp';
+    }
+    elsif (ref($topic) eq 'ARRAY') {
+        $method = 'match_all';
+    }
+    elsif (ref($topic) eq 'HASH') {
+        $times = $topic->{'^'} if $topic->{'^'};
+        if ($topic->{'='}) {
+            $topic = $topic->{'='};
+            $method = 'match';
+        }
+        elsif ($topic->{'/'}) {
+            $topic = $topic->{'/'};
+            $method = 'match_one';
+        }
+        else { die }
+    }
+    else { XXX $topic }
+
+    my $position = $self->position;
+    my $count = 0;
+    while ($self->$method($topic)) {
+        $count++;
+        last if $times eq '1' or $times eq '?';
+    }
+    my $result = (($count or $times eq '?' or $times eq '*') ? 1 : 0) ^ $not;
+
+    my $status = $result ? 'got' : 'not';
+
+    if ($state) {
+        $self->callback($status, $state);
+        pop @{$self->stack};
+    }
+
+    $self->position($position) unless $result;
+    return $result;
+}
+
+sub match_all {
+    my $self = shift;
+    my $list = shift;
+    for my $elem (@$list) {
+        $self->match($elem) or return 0;
+    }
+    return 1;
+}
+
+sub match_one {
+    my $self = shift;
+    my $list = shift;
+    for my $elem (@$list) {
+        $self->match($elem) and return 1;
+    }
+    return 0;
+}
+
+sub match_regexp {
+    my $self = shift;
+    my $pattern = shift;
+    my $regexp = $self->get_regexp($pattern);
+
+    pos($self->{stream}) = $self->position;
+    $self->{stream} =~ /$regexp/g or return 0;
+    if (defined $1) {
+        $self->arguments([$1, $2, $3, $4, $5]);
+    }
+    $self->position(pos($self->{stream}));
+
+    return 1;
+}
+
+sub get_regexp {
+    my $self = shift;
+    my $pattern = shift;
+    $pattern =~ s/^\/(.*)\/$/$1/;
+    while ($pattern =~ /\$(\w+)/) {
+        my $replacement = $self->grammar->{$1}
+          or die "'$1' not in grammar";
+        $replacement =~ s/^\/(.*)\/$/$1/;
+        $pattern =~ s/\$(\w+)/$replacement/;
+    }
+    return qr/\G$pattern/;
+}
+
+my $warn = 0;
+sub callback {
+    my $self = shift;
+    my $type = shift;
+    my $state = shift;
+    my $method = $type . '_' . $state;
+
+#     $warn = 1 if $state eq 'data_section';
+#     warn ">> $method\n" if $warn;
+
+    if ($self->receiver->can($method)) {
+        $self->receiver->$method(@{$self->arguments});
+    }
+}
 
 sub open {
     my $self = shift;
     my $file = shift;
-    open FILE, $file;
-    my $testml = do {local $/; <FILE>};
-    $self->stream($testml);
-    $self->spec(TestML::Spec->new());
+    $self->stream($self->read($file));
 }
 
-sub parse {
+sub read {
     my $self = shift;
-    $self->_parse_header();
-    $self->_parse_data();
-    return $self->spec;
-}
-
-sub _parse_header {
-    my $self = shift;
-    my $text = $self->stream;
-    while (length $text) {
-        $text =~ s/^(.*)\n//;
-        my $line = $1;
-        if ($line =~ /^\s*(#.*)?$/) {
-            next;
-        }
-        elsif (
-            $line =~ /^===\s+\S/ and
-            $self->spec->meta->data_syntax eq 'testml'
-        ) {
-            $self->stream("$line\n$text");
-            last;
-        }
-        elsif ($line =~ /^(\w+):\s*(.*)/) {
-            my ($key, $value) = ($1, $2);
-            if ($self->spec->meta->can($key)) {
-                $self->spec->meta->$key($value);
-            }
-        }
-        elsif ($line =~ /\s*(.+?)\s+(==)\s+(.+?)\s*$/) {
-            my ($left, $op, $right) = ($1, $2, $3);
-            my $test = TestML::Spec::Test->new(
-               left => $self->_parse_expr($left), 
-               op => $op,
-               right => $self->_parse_expr($right), 
-            );
-            $self->spec->tests->add($test);
-        }
-        else {
-            die "TestML parse failure on line:\n$line\n";
-        }
+    my $file = shift;
+    my $fh;
+    if (ref $file) {
+        $fh = $file;
     }
-}
-
-sub _parse_expr {
-    my $self = shift;
-    my $text = shift;
-    $text =~ s/^(\w+)//;
-    my $expr = TestML::Spec::Expr->new(start => $1);
-    while (length $text) {
-        $text =~ s/^\.(\w+)// or die;
-        my $func = TestML::Spec::Function->new(name => $1);
-        $expr->add($func);
-        if ($text =~ s/^\((.*?)\)//) {
-            my $args = $1;
-            $args =~ s/^'(.*)'$/$1/;
-            $func->args([$args]);
-        }
+    else {
+        CORE::open $fh, $file
+          or die "Can't open file '$file' for input.";
     }
-    return $expr;
-}
-
-sub _parse_data {
-    my $self = shift;
-    my $text = $self->stream;
-    die unless $self->spec->meta->data_syntax eq 'testml';
-    my $block_marker = $self->spec->meta->testml_block_marker;
-    my $entry_marker = $self->spec->meta->testml_entry_marker;
-    my $current_block;
-    my $current_entry;
-    my $current_notes = '';
-    my @lines = ($text =~ /(.*\n)/g);
-
-    my $is_throw_away = qr/^\s*(#.*)?$/;
-    my $is_start_block = qr/^\Q$block_marker\E(?:\s+(.*))?$/;
-    my $is_start_entry = qr/^\Q$entry_marker\E\s+(\w+)(?:\s*:\s*(.*?)\s*)?$/;
-
-    my ($r1, $r2);
-
-    my $notes = '';
-    $notes .= shift(@lines) while $lines[0] !~ $is_start_block;
-    $r1 = $1;
-    $self->spec->data->notes($notes);
-
-    BLOCK: while (@lines) {
-        shift(@lines);
-        my $block = TestML::Spec::Block->new(description => $r1);
-        $self->spec->data->add($block);
-
-        my $notes = '';
-        $notes .= shift(@lines) while
-            @lines &&
-            $lines[0] !~ $is_start_entry &&
-            $lines[0] !~ $is_start_block;
-        $block->notes($notes);
-        last BLOCK unless @lines;
-        if ($lines[0] =~ $is_start_block) {
-            $r1 = $1;
-            next BLOCK;
-        }
-        $lines[0] =~ $is_start_entry or die;
-        $r1 = $1;
-        $r2 = $2;
-        ENTRY: while (@lines) {
-            shift(@lines);
-            my $set = 0;
-            my $entry = TestML::Spec::Entry->new(name => $r1);
-            $block->add($entry);
-            if (defined $r2) {
-                $entry->value($r2);
-                $set = 1;
-            }
-
-            my $text = '';
-            $text .= shift(@lines) while
-                @lines &&
-                $lines[0] !~ $is_start_entry &&
-                $lines[0] !~ $is_start_block;
-            if ($set) {
-                $entry->notes($text);
-            }
-            else {
-                $entry->value($text);
-            }
-            if (@lines and $lines[0] =~ $is_start_entry) {
-                $r1 = $1;
-                $r2 = $2;
-                next ENTRY;
-            }
-            if ($block->entries->{ONLY}) {
-                $self->spec->data->blocks([]);
-                $self->spec->data->add($block);
-                last BLOCK;
-            }
-            last BLOCK unless @lines;
-            if ($lines[0] =~ $is_start_block) {
-                $r1 = $1;
-                next BLOCK;
-            }
-            die;
-        }
+    my $content = do {local $/; <$fh>};
+    close $fh;
+    if (length $content and $content !~ /\n\z/) {
+        die "File '$file' does not end with a newline.";
     }
-}
-
-sub grammar {
-    return {
-        document => [qw(head body)],
-        head => [qw(initiator statement* terminator)],
-        statement => [qw(word colonspace value)],
-        body => [qw(line*)],
-    }
+    return $content;
 }
 
 1;

@@ -3,95 +3,133 @@ use strict;
 use warnings;
 use TestML::Base -base;
 
+use TestML::Document;
 use TestML::Parser;
-use Test::Builder;
-use Test::More();
 
 field 'bridge';
-field 'testml';
-field 'test_builder' => -init => 'Test::Builder->new';
+field 'document';
+field 'base';
+field 'doc', -init => '$self->parse()';
+field 'Bridge', -init => '$self->init_bridge';
+
+sub setup {
+    die "\nDon't use TestML::Runner directly.\nUse an appropriate subclass like TestML::Runner::TAP.\n";
+}
+
+sub init_bridge {
+    my $self = shift;
+    my $class = $self->bridge or die "No Bridge class specified";
+    eval "require $class; 1" or die $@;
+    return $class->new();
+}
 
 sub run {
     my $self = shift;
-    {
-        local @INC = ('t', 't/lib', @INC);
-        my $class = $self->bridge;
-        eval "require $class";
-        die $@ if $@;
-    }
 
-    my $parser = TestML::Parser->new();
-    $parser->open($self->testml);
-    my $spec = $parser->parse;
+    $self->base(($0 =~ /(.*)\//) ? $1 : '.');
 
-    print '=== ', $spec->meta->title, " ===\n";
+    $self->setup();
 
-    if ($spec->meta->tests) {
-        $self->test_builder->plan(tests => $spec->meta->tests);
-    }
-    else {
-        $self->test_builder->no_plan();
-    }
+    $self->title();
 
-    while (my $test = $spec->tests->next) {
-        $spec->data->reset;
-        my $left_name = $test->left->start;
-        my $op = $test->op;
-        my $right_name = $test->right->start;
-        while (my $block = $spec->data->next) {
-            $block->fetch('SKIP') and next;
-            $block->fetch('LAST') and last;
-            my $left_entry = $block->fetch($test->left->start) or next; 
-            my $right_entry = $block->fetch($test->right->start) or next; 
+    $self->plan_begin();
 
-            $self->test(
-                $self->apply($test->left, $left_entry),
-                $test->op,
-                $self->apply($test->right, $right_entry),
-                $block->description,
+    for my $statement (@{$self->doc->tests->statements}) {
+        my $blocks = $self->select_blocks($statement->points);
+        for my $block (@$blocks) {
+            my $left = $self->evaluate_expression(
+                $statement->primary_expression->[0],
+                $block,
             );
+            if (@{$statement->assertion_expression}) {
+                my $right = $self->evaluate_expression(
+                    $statement->assertion_expression->[0],
+                    $block,
+                );
+                $self->do_test('EQ', $left, $right, $block->label);
+            }
         }
     }
+    $self->plan_end();
 }
 
-sub apply {
+sub select_blocks {
     my $self = shift;
-    my $expr = shift;
-    my $entry = shift;
+    my $points = shift;
+    my $blocks = [];
 
-    my $value = $entry->value;
-
-    my $function = $expr->peek;
-
-    if ($function and $function->name eq 'raw') {
-        $expr->next;
+    OUTER: for my $block (@{$self->doc->data->blocks}) {
+        exists $block->points->{SKIP} and next;
+        exists $block->points->{LAST} and last;
+        for my $point (@$points) {
+            next OUTER unless exists $block->points->{$point};
+        }
+        if (exists $block->points->{ONLY}) {
+            @$blocks = ($block);
+            last;
+        }
+        push @$blocks, $block;
     }
-    else {
-        $value =~ s/\A\s*\n//;
-        $value =~ s/\n\s*\z/\n/;
-    }
-
-    $expr->reset;
-    while (my $function = $expr->next) {
-        my $func = $self->bridge->get_function($function->name)
-            or die;
-        my @args = @{$function->args};
-        $value = &$func($value, @args);
-    }
-
-    return $value;
+    return $blocks;
 }
 
-sub test {
+sub evaluate_expression {
     my $self = shift;
-    my $left_value = shift;
-    my $operator = shift;
-    my $right_value = shift;
-    my $description = shift;
-    if (ref($left_value)) {
-        Test::More::is_deeply($left_value, $right_value, $description);
+    my $expression = shift;
+    my $block = shift;
+
+    my $topic = TestML::Topic->new(
+        document => $self->doc,
+        block => $block,
+        value => undef,
+    );
+
+    for my $transform (@{$expression->transforms}) {
+        my $function = $self->Bridge->get_transform_function($transform->name);
+        $topic->value(&$function($topic, @{$transform->args}));
     }
-    else {
-        $self->test_builder->is_eq($left_value, $right_value, $description);
+    return $topic;
+}
+
+sub parse {
+    my $self = shift;
+
+    my $parser = TestML::Parser->new(
+        receiver => TestML::Document::Builder->new(),
+        start_token => 'document',
+    );
+
+    $parser->open($self->document);
+    $parser->parse;
+
+    $self->parse_data($parser->receiver);
+    return $parser->receiver->document;
+}
+
+sub parse_data {
+    my $self = shift;
+    my $builder = shift;
+    my $document = $builder->document;
+    for my $file (@{$document->meta->data->{Data}}) {
+        my $parser = TestML::Parser->new(
+            receiver => TestML::Document::Builder->new(),
+            start_token => 'data',
+        );
+
+        if ($file eq '_') {
+            $parser->stream($builder->inline_data);
+        }
+        else {
+            $parser->open($self->base . '/' . $file);
+        }
+        $parser->parse;
+        push @{$document->data->blocks}, @{$parser->receiver->blocks};
     }
 }
+
+package TestML::Topic;
+use TestML::Base -base;
+
+field 'document';
+field 'block';
+field 'value';
