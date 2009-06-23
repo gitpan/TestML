@@ -17,8 +17,8 @@ field 'data' => {
     'Data' => [],
     'Title' => '',
     'Plan' => 0,
-    'TestMLBlockMarker' => '===',
-    'TestMLPointMarker' => '---',
+    'BlockMarker' => '===',
+    'PointMarker' => '---',
 };
 
 #-----------------------------------------------------------------------------
@@ -31,9 +31,9 @@ package TestML::Statement;
 use TestML::Base -base;
 
 field 'points' => [];
-field 'primary_expression' => [];
+field 'left_expression' => [];
 field 'assertion_operator';
-field 'assertion_expression' => [];
+field 'right_expression' => [];
 
 package TestML::Expression;
 use TestML::Base -base;
@@ -63,8 +63,10 @@ package TestML::Document::Builder;
 use TestML::Base -base;
 
 field 'document', -init => 'TestML::Document->new()';
+field 'grammar';
+
 field 'current_statement';
-field 'insert_expression_here' => [];
+field 'insert_expression_here';
 field 'current_expression' => [];
 field 'inline_data';
 
@@ -117,14 +119,18 @@ sub got_meta_statement {
     else {
         $self->document->meta->data->{$key} = $value;
     }
+    if ($key =~ /^(Block|Point)Marker$/) {
+        $key =~ s/([a-z])?([A-Z])/$1 ? ($1 . '_' . lc($2)) : lc($2)/ge;
+        $value =~ s/([\$\%\^\*\+\?\|])/\\$1/g;
+        $self->grammar->{$key} = '/' . $value . '/';
+    }
 }
 
 ##############################################################################
 sub try_test_statement {
     my $self = shift;
     $self->current_statement(TestML::Statement->new());
-    push @{$self->insert_expression_here},
-        $self->current_statement->primary_expression;
+    $self->insert_expression_here($self->current_statement->left_expression);
 }
 sub got_test_statement {
     my $self = shift;
@@ -139,6 +145,21 @@ sub not_test_statement {
     delete $self->{current_statement};
 }
 
+sub try_argument {
+    my $self = shift;
+    push @{$self->current_expression},
+        TestML::Expression->new();
+}
+sub got_argument {
+    my $self = shift;
+    push @{$self->arguments},
+        pop @{$self->current_expression};
+}
+sub not_argument {
+    my $self = shift;
+    pop @{$self->current_expression};
+}
+
 sub try_test_expression {
     my $self = shift;
     push @{$self->current_expression},
@@ -146,7 +167,7 @@ sub try_test_expression {
 }
 sub got_test_expression {
     my $self = shift;
-    push @{$self->insert_expression_here->[-1]},
+    push @{$self->insert_expression_here},
         pop @{$self->current_expression};
 }
 sub not_test_expression {
@@ -157,6 +178,7 @@ sub not_test_expression {
 sub got_data_point {
     my $self = shift;
     my $name = shift;
+    $name =~ s/^\$// or die;
     push @{$self->current_statement->points}, $name;
     push @{$self->current_expression->[-1]->transforms},
         TestML::Transform->new(
@@ -168,10 +190,32 @@ sub try_transform_call {
     my $self = shift;
     $self->arguments([]);
 }
+my %ESCAPES = (
+    '\\' => '\\',
+    "'" => "'",
+    'n' => "\n",
+    't' => "\t",
+    '0' => "\0",
+);
 sub got_single_quoted_string {
     my $self = shift;
     my $value = shift;
-    push @{$self->arguments}, $value;
+    $value =~ s/\\([\\\'])/$ESCAPES{$1}/g;
+    push @{$self->current_expression->[-1]->transforms},
+        TestML::Transform->new(
+            name => 'String',
+            args => [$value],
+        );
+}
+sub got_double_quoted_string {
+    my $self = shift;
+    my $value = shift;
+    $value =~ s/\\([\\\"nt])/$ESCAPES{$1}/g;
+    push @{$self->current_expression->[-1]->transforms},
+        TestML::Transform->new(
+            name => 'String',
+            args => [$value],
+        );
 }
 sub got_transform_name {
     my $self = shift;
@@ -186,12 +230,12 @@ sub got_transform_call {
             name => $name,
             args => $self->arguments,
         );
+    delete $self->{arguments};
 }
 
 sub got_assertion_operator {
     my $self = shift;
-    push @{$self->insert_expression_here},
-        $self->current_statement->assertion_expression;
+    $self->insert_expression_here($self->current_statement->right_expression);
 }
 
 sub got_data_section {
@@ -231,4 +275,4 @@ sub got_point_phrase {
     $self->current_block->points->{$self->point_name} = shift;
 }
 
-1; #XXX
+1;

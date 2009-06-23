@@ -5,11 +5,12 @@ use strict;
 use warnings;
 use 5.006001;
 
-$TestML::VERSION = '0.02';
+$TestML::VERSION = '0.03';
 
 sub import {
     my $run;
     my $bridge;
+    my $document;
 
     if ($_[1] eq '-base') {
         goto &TestML::Base::import;
@@ -22,6 +23,9 @@ sub import {
         if ($option eq '-run') {
             $run = $value || 'TestML::Runner::TAP';
         }
+        elsif ($option eq '-document') {
+            $document = $value;
+        }
         elsif ($option eq '-bridge') {
             $bridge = $value;
         }
@@ -30,14 +34,17 @@ sub import {
         }
     }
 
-    sub INIT {
+    sub END {
         no warnings;
-        if ($run and $bridge) {
+        if ($run) {
             eval "require $run; 1" or die $@;
             $run->new(
-                document => \ *main::DATA,
-                bridge => $bridge,
+                document => ($document || \ *main::DATA),
+                bridge => ($bridge || 'TestML::Bridge'),
             )->run();
+        }
+        elsif ($document or $bridge) {
+            die "-document or -bridge option used without -run option\n";
         }
     }
 }
@@ -58,8 +65,8 @@ TestML - A Generic Software Testing Meta Language
     %Title: Tests for AcmeEncode
     %Plan: 3
 
-    text.apply_rot13()  == rot13;
-    text.apply_md5()    == md5;
+    $text.apply_rot13()  == $rot13;
+    $text.apply_md5()    == $md5;
 
     === Encode some poetry
     --- text
@@ -86,11 +93,17 @@ To run this test you would have a normal test file that looks like this:
 
     TestML::Runner::TAP->new(
         document => 't/testml/encode.tml',
-        bridge => 'AcmeEncode::Bridge',
+        bridge => 't::Bridge',
     )->run();
 
-The apply_* functions are defined in a bridge class that is specified
-outside this test.
+or more simply:
+
+    use TestML -run,
+        -document => 't/testml/encode.tml',
+        -bridge => 't::Bridge';
+
+The apply_* functions are defined in the bridge class that is specified
+outside this test (t/Bridge.pm).
 
 =head1 DESCRIPTION
 

@@ -9,7 +9,7 @@ sub grammar {
     '/$ws+/',
     'test_expression'
   ],
-  'point_lines' => '/((?:(?!===|---)$line)*)/',
+  'point_lines' => '/((?:(?!$block_marker|$point_marker)$line)*)/',
   'assertion_call_start' => [
     '/$call_indicator$assertion_name\\($ws*/'
   ],
@@ -45,17 +45,18 @@ sub grammar {
     {
       '/' => [
         'transform_call',
-        'data_point'
+        'data_point',
+        'quoted_string',
+        'constant'
       ]
     }
   ],
-  'core_point' => '/($UPPER$WORD*)/',
   'ESCAPE' => '[0nt]',
   'LOWER' => '[a-z]',
   'ALPHANUM' => '[A-Za-z0-9]',
   'SINGLE' => '\'',
   'block_marker' => '/===/',
-  'core_meta_keyword' => '/(?:Title|Data|Plan|TestMLBlockMarker|TestMLPointMarker)/',
+  'core_meta_keyword' => '/(?:Title|Data|Plan|BlockMarker|PointMarker)/',
   'user_transform' => '/($LOWER$WORD*)/',
   'DIGIT' => '[0-9]',
   'BACK' => '\\',
@@ -75,21 +76,13 @@ sub grammar {
       'core_transform'
     ]
   },
-  'data_point' => {
-    '/' => [
-      'user_point',
-      'core_point'
-    ]
-  },
-  'data_section' => '/(===(?:$SPACE|$EOL)$ANY+|\\z)/',
-  'user_point' => '/($LOWER$WORD*)/',
+  'data_point' => '/($DOLLAR$LOWER$WORD*)/',
+  'DOLLAR' => '\\$',
+  'data_section' => '/($block_marker(?:$SPACE|$EOL)$ANY+|\\Z)/',
   'single_quoted_string' => '/(?:$SINGLE(([^$BREAK$BACK$SINGLE]|$BACK$SINGLE|$BACK$BACK)*?)$SINGLE)/',
-  'argument' => {
-    '/' => [
-      'sub_expression',
-      'quoted_string'
-    ]
-  },
+  'argument' => [
+    'sub_expression'
+  ],
   'call_indicator' => '/(?:$DOT$ws*|$ws*$DOT)/',
   'EOL' => '\\r?\\n',
   'DOUBLE' => '"',
@@ -98,6 +91,7 @@ sub grammar {
     'test_expression',
     '/$ws*\\)/'
   ],
+  'constant' => '/($UPPER$WORD*)/',
   'meta_testml_statement' => '/%TestML:$SPACE+($testml_version)(?:$SPACE+$comment|$EOL)/',
   'UPPER' => '[A-Z]',
   'WORD' => '\\w',
@@ -105,7 +99,12 @@ sub grammar {
   'document' => [
     'meta_section',
     'test_section',
-    'data_section'
+    {
+      '/' => [
+        'data_section'
+      ],
+      '^' => '?'
+    }
   ],
   'SPACES' => '\\ \\t',
   'meta_keyword' => '/(?:$core_meta_keyword|$user_meta_keyword)/',
@@ -118,7 +117,14 @@ sub grammar {
   },
   'meta_section' => [
     '/(?:$comment|$blank_line)*/',
-    'meta_testml_statement',
+    {
+      '/' => [
+        'meta_testml_statement',
+        {
+          '_' => 'No TestML meta directive found'
+        }
+      ]
+    },
     {
       '/' => [
         'meta_statement',
@@ -154,7 +160,14 @@ sub grammar {
       '^' => '?',
       '=' => 'assertion_expression'
     },
-    '/;/'
+    {
+      '/' => [
+        '/;/',
+        {
+          '_' => 'You seem to be missing a semicolon'
+        }
+      ]
+    }
   ],
   'SPACE' => '[\\ \\t]',
   'ws' => '/(?:$SPACE|$EOL|$comment)/',

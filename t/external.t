@@ -1,4 +1,4 @@
-use TestML -run, -bridge => 'TestMLTestBridge';
+use TestML -run, -bridge => 't::Bridge';
 
 __DATA__
 
@@ -7,4 +7,4 @@ __DATA__
 %Data: external2.tml
 %Data: external1.tml
 
-foo == bar;
+$foo == $bar;

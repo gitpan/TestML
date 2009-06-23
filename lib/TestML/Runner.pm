@@ -17,33 +17,37 @@ sub setup {
 }
 
 sub init_bridge {
-    my $self = shift;
-    my $class = $self->bridge or die "No Bridge class specified";
-    eval "require $class; 1" or die $@;
-    return $class->new();
+    die "'init_bridge' must be implemented in subclass";
 }
 
 sub run {
     my $self = shift;
 
     $self->base(($0 =~ /(.*)\//) ? $1 : '.');
-
-    $self->setup();
-
     $self->title();
-
     $self->plan_begin();
 
     for my $statement (@{$self->doc->tests->statements}) {
-        my $blocks = $self->select_blocks($statement->points);
+        my $points = $statement->points;
+        if (not @$points) {
+            my $left = $self->evaluate_expression($statement->left_expression->[0]);
+            if (@{$statement->right_expression}) {
+                my $right = $self->evaluate_expression(
+                    $statement->right_expression->[0]
+                );
+                $self->do_test('EQ', $left, $right, undef);
+            }
+            next;
+        }
+        my $blocks = $self->select_blocks($points);
         for my $block (@$blocks) {
             my $left = $self->evaluate_expression(
-                $statement->primary_expression->[0],
+                $statement->left_expression->[0],
                 $block,
             );
-            if (@{$statement->assertion_expression}) {
+            if (@{$statement->right_expression}) {
                 my $right = $self->evaluate_expression(
-                    $statement->assertion_expression->[0],
+                    $statement->right_expression->[0],
                     $block,
                 );
                 $self->do_test('EQ', $left, $right, $block->label);
@@ -76,19 +80,39 @@ sub select_blocks {
 sub evaluate_expression {
     my $self = shift;
     my $expression = shift;
-    my $block = shift;
+    my $block = shift || undef;
 
-    my $topic = TestML::Topic->new(
+    my $context = TestML::Context->new(
         document => $self->doc,
         block => $block,
         value => undef,
     );
 
     for my $transform (@{$expression->transforms}) {
-        my $function = $self->Bridge->get_transform_function($transform->name);
-        $topic->value(&$function($topic, @{$transform->args}));
+        my $transform_name = $transform->name;
+        next if $context->error and $transform_name ne 'Catch';
+        my $function = $self->Bridge->__get_transform_function($transform_name);
+        my $value = eval {
+            &$function(
+                $context,
+                map {
+                    (ref($_) eq 'TestML::Expression')
+                    ? $self->evaluate_expression($_, $block)
+                    : $_
+                } @{$transform->args}
+            );
+        };
+        if ($@) {
+            $context->error($@);
+        }
+        else {
+            $context->value($value);
+        }
     }
-    return $topic;
+    if ($context->error) {
+        die $context->error;
+    }
+    return $context;
 }
 
 sub parse {
@@ -98,21 +122,24 @@ sub parse {
         receiver => TestML::Document::Builder->new(),
         start_token => 'document',
     );
+    $parser->receiver->grammar($parser->grammar);
 
     $parser->open($self->document);
     $parser->parse;
 
-    $self->parse_data($parser->receiver);
+    $self->parse_data($parser);
     return $parser->receiver->document;
 }
 
 sub parse_data {
     my $self = shift;
-    my $builder = shift;
+    my $parser = shift;
+    my $builder = $parser->receiver;
     my $document = $builder->document;
     for my $file (@{$document->meta->data->{Data}}) {
         my $parser = TestML::Parser->new(
             receiver => TestML::Document::Builder->new(),
+            grammar => $parser->grammar,
             start_token => 'data',
         );
 
@@ -127,9 +154,11 @@ sub parse_data {
     }
 }
 
-package TestML::Topic;
+package TestML::Context;
 use TestML::Base -base;
 
 field 'document';
 field 'block';
+field 'point';
 field 'value';
+field 'error';

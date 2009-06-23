@@ -11,7 +11,6 @@ field 'start_token';
 field 'position' => 0;
 field 'receiver';
 field 'arguments' => [];
-field 'stack' => [];
 
 sub parse {
     my $self = shift;
@@ -30,8 +29,6 @@ sub match {
     my $state = undef;
     if (not ref($topic) and $topic =~ /^\w+$/) {
         $state = $topic;
-
-        push @{$self->stack}, $state;
 
         if (not defined $self->grammar->{$topic}) {
             die "\n\n*** No grammar support for '$topic'\n\n";
@@ -60,6 +57,9 @@ sub match {
             $topic = $topic->{'/'};
             $method = 'match_one';
         }
+        elsif ($topic->{'_'}) {
+            $self->throw_error($topic->{'_'});
+        }
         else { die }
     }
     else { XXX $topic }
@@ -76,7 +76,6 @@ sub match {
 
     if ($state) {
         $self->callback($status, $state);
-        pop @{$self->stack};
     }
 
     $self->position($position) unless $result;
@@ -136,9 +135,6 @@ sub callback {
     my $state = shift;
     my $method = $type . '_' . $state;
 
-#     $warn = 1 if $state eq 'data_section';
-#     warn ">> $method\n" if $warn;
-
     if ($self->receiver->can($method)) {
         $self->receiver->$method(@{$self->arguments});
     }
@@ -167,6 +163,20 @@ sub read {
         die "File '$file' does not end with a newline.";
     }
     return $content;
+}
+
+sub throw_error {
+    my $self = shift;
+    my $msg = shift;
+    my $line = @{[substr($self->stream, 0, $self->position) =~ /(\n)/g]} + 1;
+    my $context = substr($self->stream, $self->position, 50);
+    $context =~ s/\n/\\n/g;
+    die <<"...";
+Error parsing TestML document:
+  msg: $msg
+  line: $line
+  context: "$context"
+...
 }
 
 1;
