@@ -1,236 +1,473 @@
 package TestML::Parser::Grammar;
+use base 'Parse::Pegex';
 use strict;
 use warnings;
-sub grammar {
-    return +{
-  'assertion_operation' => [
-    '/$ws+/',
-    'assertion_operator',
-    '/$ws+/',
-    'test_expression'
-  ],
-  'point_lines' => '/((?:(?!$block_marker|$point_marker)$line)*)/',
-  'assertion_call_start' => [
-    '/$call_indicator$assertion_name\\($ws*/'
-  ],
-  'point_marker' => '/---/',
-  'ANY' => '[\\s\\S]',
-  'block_header' => [
-    'block_marker',
-    {
-      '^' => '?',
-      '=' => [
-        '/$SPACE+/',
-        'block_label'
-      ]
-    },
-    '/$SPACE*$EOL/'
-  ],
-  'HASH' => '#',
-  'test_expression' => [
-    'sub_expression',
-    {
-      '/' => [
-        [
-          '!assertion_call_start',
-          'call_indicator',
-          'sub_expression'
-        ]
-      ],
-      '^' => '*'
-    }
-  ],
-  'line' => '/$NON_BREAK*$EOL/',
-  'sub_expression' => [
-    {
-      '/' => [
-        'transform_call',
-        'data_point',
-        'quoted_string',
-        'constant'
-      ]
-    }
-  ],
-  'ESCAPE' => '[0nt]',
-  'LOWER' => '[a-z]',
-  'ALPHANUM' => '[A-Za-z0-9]',
-  'SINGLE' => '\'',
-  'block_marker' => '/===/',
-  'core_meta_keyword' => '/(?:Title|Data|Plan|BlockMarker|PointMarker)/',
-  'user_transform' => '/($LOWER$WORD*)/',
-  'DIGIT' => '[0-9]',
-  'BACK' => '\\',
-  'assertion_operator' => '/(==)/',
-  'test_section' => [
-    {
-      '/' => [
-        'ws',
-        'test_statement'
-      ],
-      '^' => '*'
-    }
-  ],
-  'transform_name' => {
-    '/' => [
-      'user_transform',
-      'core_transform'
-    ]
+
+our $grammar = +{
+  'ALWAYS' => {
+    '+re' => qr/(?-xism:\G)/
   },
-  'data_point' => '/($DOLLAR$LOWER$WORD*)/',
-  'DOLLAR' => '\\$',
-  'data_section' => '/($block_marker(?:$SPACE|$EOL)$ANY+|\\Z)/',
-  'single_quoted_string' => '/(?:$SINGLE(([^$BREAK$BACK$SINGLE]|$BACK$SINGLE|$BACK$BACK)*?)$SINGLE)/',
-  'argument' => [
-    'sub_expression'
-  ],
-  'call_indicator' => '/(?:$DOT$ws*|$ws*$DOT)/',
-  'EOL' => '\\r?\\n',
-  'DOUBLE' => '"',
-  'assertion_call' => [
-    'assertion_call_start',
-    'test_expression',
-    '/$ws*\\)/'
-  ],
-  'constant' => '/($UPPER$WORD*)/',
-  'meta_testml_statement' => '/%TestML:$SPACE+($testml_version)(?:$SPACE+$comment|$EOL)/',
-  'UPPER' => '[A-Z]',
-  'WORD' => '\\w',
-  'BREAK' => '\\n',
-  'document' => [
-    'meta_section',
-    'test_section',
-    {
-      '/' => [
-        'data_section'
-      ],
-      '^' => '?'
-    }
-  ],
-  'SPACES' => '\\ \\t',
-  'meta_keyword' => '/(?:$core_meta_keyword|$user_meta_keyword)/',
-  'point_phrase' => '/($NON_BREAK*)/',
-  'DOT' => '\\.',
-  'unquoted_string' => '/[^$SPACES$BREAK$HASH](?:[^$BREAK$HASH]*[^$SPACES$BREAK$HASH])?/',
-  'data' => {
-    '^' => '*',
-    '=' => 'data_block'
+  'NO_META_TESTML_ERROR' => {
+    '+rule' => 'ALWAYS'
   },
-  'meta_section' => [
-    '/(?:$comment|$blank_line)*/',
-    {
-      '/' => [
-        'meta_testml_statement',
-        {
-          '_' => 'No TestML meta directive found'
-        }
-      ]
-    },
-    {
-      '/' => [
-        'meta_statement',
-        'comment',
-        'blank_line'
-      ],
-      '^' => '*'
-    }
-  ],
-  'lines_point' => [
-    '/$point_marker$SPACE+/',
-    'user_point_name',
-    '/$SPACE*$EOL/',
-    'point_lines'
-  ],
-  'data_block' => [
-    'block_header',
-    {
-      '/' => [
-        'blank_line',
-        'comment'
-      ],
-      '^' => '*'
-    },
-    {
-      '^' => '*',
-      '=' => 'block_point'
-    }
-  ],
-  'test_statement' => [
-    'test_expression',
-    {
-      '^' => '?',
-      '=' => 'assertion_expression'
-    },
-    {
-      '/' => [
-        '/;/',
-        {
-          '_' => 'You seem to be missing a semicolon'
-        }
-      ]
-    }
-  ],
-  'SPACE' => '[\\ \\t]',
-  'ws' => '/(?:$SPACE|$EOL|$comment)/',
-  'blank_line' => '/$SPACE*$EOL/',
-  'block_label' => [
-    '/([^$SPACES$BREAK]($NON_BREAK*[^SPACES$BREAK])?)/'
-  ],
-  'assertion_name' => '/EQ/',
-  'user_meta_keyword' => '/$LOWER$WORD*/',
-  'phrase_point' => [
-    '/$point_marker$SPACE+/',
-    'user_point_name',
-    '/:$SPACE/',
-    'point_phrase',
-    '/$EOL/',
-    '/(?:$comment|$blank_line)*/'
-  ],
-  'NON_BREAK' => '.',
-  'core_transform' => '/($UPPER$WORD*)/',
-  'transform_call' => [
-    'transform_name',
-    '/\\($ws*/',
-    'argument_list',
-    '/$ws*\\)/'
-  ],
-  'meta_value' => '/(?:$single_quoted_string|$double_quoted_string|$unquoted_string)/',
-  'testml_version' => '/($DIGIT$DOT$DIGIT+)/',
-  'quoted_string' => {
-    '/' => [
-      'single_quoted_string',
-      'double_quoted_string'
-    ]
+  'SEMI' => {
+    '+re' => qr/(?-xism:\G;)/
   },
-  'assertion_expression' => {
-    '/' => [
-      'assertion_operation',
-      'assertion_call'
-    ]
+  'SEMICOLON_ERROR' => {
+    '+rule' => 'ALWAYS'
   },
-  'argument_list' => {
-    '^' => '?',
-    '=' => [
-      'argument',
+  'assertion_call' => {
+    '+any' => [
       {
-        '^' => '*',
-        '=' => [
-          '/$ws*,$ws*/',
-          'argument'
+        '+rule' => 'assertion_eq'
+      },
+      {
+        '+rule' => 'assertion_ok'
+      },
+      {
+        '+rule' => 'assertion_has'
+      }
+    ]
+  },
+  'assertion_call_test' => {
+    '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|#.*\r?\n)*|(?:[\ \t]|\r?\n|#.*\r?\n)*\.)(?:EQ|OK|HAS)\()/
+  },
+  'assertion_eq' => {
+    '+any' => [
+      {
+        '+rule' => 'assertion_operator_eq'
+      },
+      {
+        '+rule' => 'assertion_function_eq'
+      }
+    ]
+  },
+  'assertion_function_eq' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|#.*\r?\n)*|(?:[\ \t]|\r?\n|#.*\r?\n)*\.)EQ\()/
+      },
+      {
+        '+rule' => 'test_expression'
+      },
+      {
+        '+re' => qr/(?-xism:\G\))/
+      }
+    ]
+  },
+  'assertion_function_has' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|#.*\r?\n)*|(?:[\ \t]|\r?\n|#.*\r?\n)*\.)HAS\()/
+      },
+      {
+        '+rule' => 'test_expression'
+      },
+      {
+        '+re' => qr/(?-xism:\G\))/
+      }
+    ]
+  },
+  'assertion_function_ok' => {
+    '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|#.*\r?\n)*|(?:[\ \t]|\r?\n|#.*\r?\n)*\.)OK(?:\((?:[\ \t]|\r?\n|#.*\r?\n)*\))?)/
+  },
+  'assertion_has' => {
+    '+any' => [
+      {
+        '+rule' => 'assertion_operator_has'
+      },
+      {
+        '+rule' => 'assertion_function_has'
+      }
+    ]
+  },
+  'assertion_ok' => {
+    '+rule' => 'assertion_function_ok'
+  },
+  'assertion_operator_eq' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|#.*\r?\n)+==(?:[\ \t]|\r?\n|#.*\r?\n)+)/
+      },
+      {
+        '+rule' => 'test_expression'
+      }
+    ]
+  },
+  'assertion_operator_has' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|#.*\r?\n)+~~(?:[\ \t]|\r?\n|#.*\r?\n)+)/
+      },
+      {
+        '+rule' => 'test_expression'
+      }
+    ]
+  },
+  'blank_line' => {
+    '+re' => qr/(?-xism:\G[\ \t]*\r?\n)/
+  },
+  'block_header' => {
+    '+all' => [
+      {
+        '+rule' => 'block_marker'
+      },
+      {
+        '+all' => [
+          {
+            '+re' => qr/(?-xism:\G[\ \t]+)/
+          },
+          {
+            '+rule' => 'block_label'
+          }
+        ],
+        '<' => '?'
+      },
+      {
+        '+re' => qr/(?-xism:\G[\ \t]*\r?\n)/
+      }
+    ]
+  },
+  'block_label' => {
+    '+rule' => 'unquoted_string'
+  },
+  'block_marker' => {
+    '+re' => qr/(?-xism:\G===)/
+  },
+  'block_point' => {
+    '+any' => [
+      {
+        '+rule' => 'lines_point'
+      },
+      {
+        '+rule' => 'phrase_point'
+      }
+    ]
+  },
+  'call_indicator' => {
+    '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|#.*\r?\n)*|(?:[\ \t]|\r?\n|#.*\r?\n)*\.))/
+  },
+  'comment' => {
+    '+re' => qr/(?-xism:\G#.*\r?\n)/
+  },
+  'core_transform' => {
+    '+re' => qr/(?-xism:\G([A-Z]\w*))/
+  },
+  'data_block' => {
+    '+all' => [
+      {
+        '+rule' => 'block_header'
+      },
+      {
+        '+any' => [
+          {
+            '+rule' => 'blank_line'
+          },
+          {
+            '+rule' => 'comment'
+          }
+        ],
+        '<' => '*'
+      },
+      {
+        '+rule' => 'block_point',
+        '<' => '*'
+      }
+    ]
+  },
+  'data_section' => {
+    '+any' => [
+      {
+        '+rule' => 'testml_data_section'
+      },
+      {
+        '+rule' => 'yaml_data_section'
+      },
+      {
+        '+rule' => 'json_data_section'
+      },
+      {
+        '+rule' => 'xml_data_section'
+      }
+    ]
+  },
+  'document' => {
+    '+all' => [
+      {
+        '+rule' => 'meta_section'
+      },
+      {
+        '+rule' => 'test_section'
+      },
+      {
+        '+rule' => 'data_section',
+        '<' => '?'
+      }
+    ]
+  },
+  'double_quoted_string' => {
+    '+re' => qr/(?-xism:\G(?:"(([^\n\\"]|\\"|\\\\|\\[0nt])*?)"))/
+  },
+  'json_data_section' => {
+    '+re' => qr/(?-xism:\G(\[.+))/
+  },
+  'lines_point' => {
+    '+all' => [
+      {
+        '+rule' => 'point_marker'
+      },
+      {
+        '+re' => qr/(?-xism:\G[\ \t]+)/
+      },
+      {
+        '+rule' => 'point_name'
+      },
+      {
+        '+re' => qr/(?-xism:\G[\ \t]*\r?\n)/
+      },
+      {
+        '+rule' => 'point_lines'
+      }
+    ]
+  },
+  'meta_section' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G(?:#.*\r?\n|[\ \t]*\r?\n)*)/
+      },
+      {
+        '+any' => [
+          {
+            '+rule' => 'meta_testml_statement'
+          },
+          {
+            '+rule' => 'NO_META_TESTML_ERROR'
+          }
+        ]
+      },
+      {
+        '+any' => [
+          {
+            '+rule' => 'meta_statement'
+          },
+          {
+            '+rule' => 'comment'
+          },
+          {
+            '+rule' => 'blank_line'
+          }
+        ],
+        '<' => '*'
+      }
+    ]
+  },
+  'meta_statement' => {
+    '+re' => qr/(?-xism:\G%((?:(?:Title|Data|Plan|BlockMarker|PointMarker)|[a-z]\w*)):[\ \t]+((?:(?:'(([^\n\\']|\\'|\\\\)*?)')|(?:"(([^\n\\"]|\\"|\\\\|\\[0nt])*?)")|([^\ \t\n#](?:[^\n#]*[^\ \t\n#])?)))(?:[\ \t]+#.*\r?\n|\r?\n))/
+  },
+  'meta_testml_statement' => {
+    '+re' => qr/(?-xism:\G%TestML:[\ \t]+(([0-9]\.[0-9]+))(?:[\ \t]+#.*\r?\n|\r?\n))/
+  },
+  'phrase_point' => {
+    '+all' => [
+      {
+        '+rule' => 'point_marker'
+      },
+      {
+        '+re' => qr/(?-xism:\G[\ \t]+)/
+      },
+      {
+        '+rule' => 'point_name'
+      },
+      {
+        '+re' => qr/(?-xism:\G:[\ \t])/
+      },
+      {
+        '+rule' => 'point_phrase'
+      },
+      {
+        '+re' => qr/(?-xism:\G\r?\n)/
+      },
+      {
+        '+re' => qr/(?-xism:\G(?:#.*\r?\n|[\ \t]*\r?\n)*)/
+      }
+    ]
+  },
+  'point_call' => {
+    '+re' => qr/(?-xism:\G(\*[a-z]\w*))/
+  },
+  'point_lines' => {
+    '+re' => qr/(?-xism:\G((?:(?!===|---).*\r?\n)*))/
+  },
+  'point_marker' => {
+    '+re' => qr/(?-xism:\G---)/
+  },
+  'point_name' => {
+    '+re' => qr/(?-xism:\G([a-z]\w*))/
+  },
+  'point_phrase' => {
+    '+re' => qr/(?-xism:\G(([^\ \t\n#](?:[^\n#]*[^\ \t\n#])?)))/
+  },
+  'quoted_string' => {
+    '+any' => [
+      {
+        '+rule' => 'single_quoted_string'
+      },
+      {
+        '+rule' => 'double_quoted_string'
+      }
+    ]
+  },
+  'single_quoted_string' => {
+    '+re' => qr/(?-xism:\G(?:'(([^\n\\']|\\'|\\\\)*?)'))/
+  },
+  'string_call' => {
+    '+rule' => 'quoted_string'
+  },
+  'sub_expression' => {
+    '+any' => [
+      {
+        '+rule' => 'point_call'
+      },
+      {
+        '+rule' => 'string_call'
+      },
+      {
+        '+rule' => 'transform_call'
+      }
+    ]
+  },
+  'test_expression' => {
+    '+all' => [
+      {
+        '+rule' => 'sub_expression'
+      },
+      {
+        '+all' => [
+          {
+            '+not' => 'assertion_call_test'
+          },
+          {
+            '+rule' => 'call_indicator'
+          },
+          {
+            '+rule' => 'sub_expression'
+          }
+        ],
+        '<' => '*'
+      }
+    ]
+  },
+  'test_section' => {
+    '+any' => [
+      {
+        '+rule' => 'ws'
+      },
+      {
+        '+rule' => 'test_statement'
+      }
+    ],
+    '<' => '*'
+  },
+  'test_statement' => {
+    '+all' => [
+      {
+        '+rule' => 'test_expression'
+      },
+      {
+        '+rule' => 'assertion_call',
+        '<' => '?'
+      },
+      {
+        '+any' => [
+          {
+            '+rule' => 'SEMI'
+          },
+          {
+            '+rule' => 'SEMICOLON_ERROR'
+          }
         ]
       }
     ]
   },
-  'comment' => '/$HASH$line/',
-  'block_point' => {
-    '/' => [
-      'lines_point',
-      'phrase_point'
+  'testml_data_section' => {
+    '+rule' => 'data_block',
+    '<' => '*'
+  },
+  'transform_argument' => {
+    '+rule' => 'sub_expression'
+  },
+  'transform_argument_list' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G\((?:[\ \t]|\r?\n|#.*\r?\n)*)/
+      },
+      {
+        '+rule' => 'transform_arguments',
+        '<' => '?'
+      },
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|#.*\r?\n)*\))/
+      }
     ]
   },
-  'double_quoted_string' => '/(?:$DOUBLE(([^$BREAK$BACK$DOUBLE]|$BACK$DOUBLE|$BACK$BACK|$BACK$ESCAPE)*?)$DOUBLE)/',
-  'meta_statement' => '/%($meta_keyword):$SPACE+($meta_value)(?:$SPACE+$comment|$EOL)/',
-  'user_point_name' => '/($LOWER$WORD*)/'
+  'transform_arguments' => {
+    '+all' => [
+      {
+        '+rule' => 'transform_argument'
+      },
+      {
+        '+all' => [
+          {
+            '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|#.*\r?\n)*,(?:[\ \t]|\r?\n|#.*\r?\n)*)/
+          },
+          {
+            '+rule' => 'transform_argument'
+          }
+        ],
+        '<' => '*'
+      }
+    ]
+  },
+  'transform_call' => {
+    '+all' => [
+      {
+        '+rule' => 'transform_name'
+      },
+      {
+        '+rule' => 'transform_argument_list',
+        '<' => '?'
+      }
+    ]
+  },
+  'transform_name' => {
+    '+any' => [
+      {
+        '+rule' => 'user_transform'
+      },
+      {
+        '+rule' => 'core_transform'
+      }
+    ]
+  },
+  'unquoted_string' => {
+    '+re' => qr/(?-xism:\G([^\ \t\n#](?:[^\n#]*[^\ \t\n#])?))/
+  },
+  'user_transform' => {
+    '+re' => qr/(?-xism:\G([a-z]\w*))/
+  },
+  'ws' => {
+    '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|#.*\r?\n))/
+  },
+  'xml_data_section' => {
+    '+re' => qr/(?-xism:\G(<.+))/
+  },
+  'yaml_data_section' => {
+    '+re' => qr/(?-xism:\G(---[\ \t]*\r?\n.+))/
+  }
 };
+
+sub grammar {
+    return $grammar;
 }
 
 1;

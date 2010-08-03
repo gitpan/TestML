@@ -1,5 +1,4 @@
 use TestML -run, -bridge => 'main';
-use base TestML::Bridge;
 
 sub upper {
     my $self = shift;
@@ -9,7 +8,7 @@ __DATA__
 
 %TestML: 1.0
 
-$foo.upper() == $bar;
+*foo.upper() == *bar;
 
 === Foo for thought
 --- foo: o hai
