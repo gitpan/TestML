@@ -1,4 +1,9 @@
 ---
+version: 0.05
+date:    Tue Aug 10 01:45:13 PDT 2010
+changes:
+- Uses Pegex (moved from Parse::Pegex)
+---
 version: 0.04
 date:    Tue Aug  3 02:50:49 PDT 2010
 changes:

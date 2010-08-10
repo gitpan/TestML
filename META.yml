@@ -18,8 +18,8 @@ no_index:
     - inc
     - t
 requires:
-  Parse::Pegex: 0
+  Pegex: 0
   perl: 5.6.1
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.04
+version: 0.05

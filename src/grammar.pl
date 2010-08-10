@@ -1,42 +1,21 @@
-use YAML::XS;
-use Data::Dumper;
+use lib "$ENV{HOME}/src/pegex-pm/lib";
+use Pegex::Compiler;
 
-$Data::Dumper::Terse = 1;
-$Data::Dumper::Indent = 1;
-$Data::Dumper::Sortkeys = 1;
-
-my $hash = YAML::XS::LoadFile(shift);
-precompile($hash);
-my $perl = Data::Dumper::Dumper($hash);
+open IN, shift or die;
+my $testml = do {local $/; <IN>};
+my $perl = Pegex::Compiler->compile($testml)->to_perl;
 chomp($perl);
 
 print <<"...";
 package TestML::Parser::Grammar;
-use base 'TestML::Parser::Pegex';
+use base 'Pegex::Grammar';
 use strict;
 use warnings;
 
-our \$grammar = +$perl;
-
-sub grammar {
-    return \$grammar;
+sub grammar_tree {
+    return +$perl;
 }
 
 1;
 ...
 
-sub precompile {
-    my $node = shift;
-    if (ref($node) eq 'HASH') {
-        if (exists $node->{'+re'}) {
-            my $re = $node->{'+re'};
-            $node->{'+re'} = qr/\G$re/;
-        }
-        else {
-            precompile($node->{$_}) for keys %$node;
-        }
-    }
-    elsif (ref($node) eq 'ARRAY') {
-        precompile($_) for @$node;
-    }
-}

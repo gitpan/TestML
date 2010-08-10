@@ -25,8 +25,8 @@ META.yml
 README
 src/chars.yaml
 src/grammar.pl
-src/grammar.yaml
 src/Makefile
+src/testml.pgx
 t/arguments.t
 t/basic.t
 t/Bridge.pm
