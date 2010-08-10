@@ -27,6 +27,7 @@ src/grammar.pl
 src/Makefile
 src/testml.pgx
 t/arguments.t
+t/assertions.t
 t/basic.t
 t/Bridge.pm
 t/dataless.t
@@ -42,4 +43,5 @@ t/simple-use.t
 t/standard.t
 t/strings.t
 t/testml.pl
+t/truth.t
 t/yaml-tests.t
