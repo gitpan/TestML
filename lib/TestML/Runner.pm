@@ -15,8 +15,6 @@ sub title { }
 sub plan_begin { }
 sub plan_end { }
 
-use XXX;
-
 sub run {
     my $self = shift;
 
@@ -81,16 +79,23 @@ sub evaluate_expression {
     my $context = TestML::Context->new(
         document => $self->doc,
         block => $block,
+        not => 0,
+        type => 'None',
     );
 
     for my $transform (@{$expression->transforms}) {
         my $transform_name = $transform->name;
-        if ($transform_name eq 'Not') {
-            $context->value(not $context->value);
+        next if $context->type eq 'Error' and $transform_name ne 'Catch';
+        if (ref($transform) eq 'TestML::String') {
+            $context->set(Str => $transform->value);
             next;
         }
-        next if $context->error and $transform_name ne 'Catch';
+        if ($transform_name eq 'Not') {
+            $context->not($context->not ? 0 : 1);
+            next;
+        }
         my $function = $self->get_transform_function($transform_name);
+        $context->_set(0);
         my $value = eval {
             &$function(
                 $context,
@@ -102,10 +107,11 @@ sub evaluate_expression {
             );
         };
         if ($@) {
+            $context->type('Error');
             $context->error($@);
             $context->value(undef);
         }
-        else {
+        elsif (not $context->_set) {
             $context->value($value);
         }
     }
@@ -191,7 +197,70 @@ has 'block';
 has 'point';
 has 'value';
 has 'error';
-has 'state' => 'none';
-has 'not' => 0;
+has 'type';
+has 'not';
+has '_set';
+
+sub set {
+    my $self = shift;
+    my $type = shift;
+    my $value = shift;
+    $self->throw("Invalid context type '$type'")
+        unless $type =~ /^(?:None|Str|Num|Bool|List)$/;
+    $self->type($type);
+    $self->value($value);
+    $self->_set(1);
+}
+
+sub get_value_if_type {
+    my $self = shift;
+    my $type = $self->type;
+    return $self->value if grep $type eq $_, @_;
+    $self->throw("context object is type '$type', but '@_' required");
+}
+
+sub get_value_as_str {
+    my $self = shift;
+    my $type = $self->type;
+    my $value = $self->value;
+    return
+        $type eq 'Str' ? $value :
+        $type eq 'List' ? join("\n", @$value, '') :
+        $type eq 'Bool' ? $value ? '1' : '' :
+        $type eq 'Num' ? "$value" :
+        $type eq 'None' ? '' :
+        $self->throw("Str type error: '$type'");
+}
+
+sub get_value_as_num {
+    my $self = shift;
+    my $type = $self->type;
+    my $value = $self->value;
+    return
+        $type eq 'Str' ? $value + 0 :
+        $type eq 'List' ? scalar(@$value) :
+        $type eq 'Bool' ? $value :
+        $type eq 'Num' ? $value :
+        $type eq 'None' ? 0 :
+        $self->throw("Num type error: '$type'");
+}
+
+sub get_value_as_bool {
+    my $self = shift;
+    my $type = $self->type;
+    my $value = $self->value;
+    return
+        $type eq 'Str' ? length($value) ? 1 : 0 :
+        $type eq 'List' ? @$value ? 1 : 0 :
+        $type eq 'Bool' ? $value :
+        $type eq 'Num' ? $value == 0 ? 0 : 1 :
+        $type eq 'None' ? 0 :
+        $self->throw("Bool type error: '$type'");
+}
+
+sub throw {
+    require Carp;
+    Carp::croak $_[1];
+}
 
 1;
