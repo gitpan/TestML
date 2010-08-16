@@ -42,5 +42,17 @@ t/simple-use.t
 t/standard.t
 t/strings.t
 t/testml.pl
+t/testml/arguments.tml
+t/testml/assertions.tml
+t/testml/basic.tml
+t/testml/comments.tml
+t/testml/data.tml
+t/testml/dataless.tml
+t/testml/exceptions.tml
+t/testml/Makefile
+t/testml/markers.tml
+t/testml/standard.tml
+t/testml/syntax.tml
+t/testml/truth.tml
 t/truth.t
 t/yaml-tests.t
