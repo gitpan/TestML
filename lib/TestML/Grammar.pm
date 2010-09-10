@@ -1,11 +1,25 @@
-package TestML::Parser::Grammar;
+package TestML::Grammar;
 use base 'Pegex::Grammar';
-use strict;
-use warnings;
 
 sub grammar_tree {
     return +{
-  '_FIRST_RULE' => 'document',
+  'NEVER' => {
+    '+re' => qr/(?-xism:\G(?!))/
+  },
+  'TOP' => {
+    '+all' => [
+      {
+        '+rule' => 'NEVER'
+      },
+      {
+        '+rule' => 'code_section'
+      },
+      {
+        '+rule' => 'data_section'
+      }
+    ]
+  },
+  '_FIRST_RULE' => 'TOP',
   'assertion_call' => {
     '+any' => [
       {
@@ -38,7 +52,7 @@ sub grammar_tree {
         '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|\#.*\r?\n)*|(?:[\ \t]|\r?\n|\#.*\r?\n)*\.)EQ\()/
       },
       {
-        '+rule' => 'test_expression'
+        '+rule' => 'code_expression'
       },
       {
         '+re' => qr/(?-xism:\G\))/
@@ -51,7 +65,7 @@ sub grammar_tree {
         '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|\#.*\r?\n)*|(?:[\ \t]|\r?\n|\#.*\r?\n)*\.)HAS\()/
       },
       {
-        '+rule' => 'test_expression'
+        '+rule' => 'code_expression'
       },
       {
         '+re' => qr/(?-xism:\G\))/
@@ -80,7 +94,7 @@ sub grammar_tree {
         '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)+==(?:[\ \t]|\r?\n|\#.*\r?\n)+)/
       },
       {
-        '+rule' => 'test_expression'
+        '+rule' => 'code_expression'
       }
     ]
   },
@@ -90,7 +104,23 @@ sub grammar_tree {
         '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)+~~(?:[\ \t]|\r?\n|\#.*\r?\n)+)/
       },
       {
-        '+rule' => 'test_expression'
+        '+rule' => 'code_expression'
+      }
+    ]
+  },
+  'assignment_statement' => {
+    '+all' => [
+      {
+        '+rule' => 'variable_name'
+      },
+      {
+        '+re' => qr/(?-xism:\G\s+=\s+)/
+      },
+      {
+        '+rule' => 'code_expression'
+      },
+      {
+        '+rule' => 'semicolon'
       }
     ]
   },
@@ -137,6 +167,64 @@ sub grammar_tree {
   'call_indicator' => {
     '+re' => qr/(?-xism:\G(?:\.(?:[\ \t]|\r?\n|\#.*\r?\n)*|(?:[\ \t]|\r?\n|\#.*\r?\n)*\.))/
   },
+  'code_expression' => {
+    '+all' => [
+      {
+        '+rule' => 'code_object'
+      },
+      {
+        '+rule' => 'unit_call',
+        '<' => '*'
+      }
+    ]
+  },
+  'code_object' => {
+    '+any' => [
+      {
+        '+rule' => 'function_object'
+      },
+      {
+        '+rule' => 'point_object'
+      },
+      {
+        '+rule' => 'string_object'
+      },
+      {
+        '+rule' => 'number_object'
+      },
+      {
+        '+rule' => 'transform_object'
+      }
+    ]
+  },
+  'code_section' => {
+    '+any' => [
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)+)/
+      },
+      {
+        '+rule' => 'assignment_statement'
+      },
+      {
+        '+rule' => 'code_statement'
+      }
+    ],
+    '<' => '*'
+  },
+  'code_statement' => {
+    '+all' => [
+      {
+        '+rule' => 'code_expression'
+      },
+      {
+        '+rule' => 'assertion_call',
+        '<' => '?'
+      },
+      {
+        '+rule' => 'semicolon'
+      }
+    ]
+  },
   'comment' => {
     '+re' => qr/(?-xism:\G\#.*\r?\n)/
   },
@@ -166,40 +254,74 @@ sub grammar_tree {
     ]
   },
   'data_section' => {
-    '+any' => [
-      {
-        '+rule' => 'testml_data_section'
-      },
-      {
-        '+rule' => 'yaml_data_section'
-      },
-      {
-        '+rule' => 'json_data_section'
-      },
-      {
-        '+rule' => 'xml_data_section'
-      }
-    ]
-  },
-  'document' => {
-    '+all' => [
-      {
-        '+rule' => 'meta_section'
-      },
-      {
-        '+rule' => 'test_section'
-      },
-      {
-        '+rule' => 'data_section',
-        '<' => '?'
-      }
-    ]
+    '+rule' => 'data_block',
+    '<' => '*'
   },
   'double_quoted_string' => {
     '+re' => qr/(?-xism:\G(?:"(([^\n\\"]|\\"|\\\\|\\[0nt])*?)"))/
   },
-  'json_data_section' => {
-    '+re' => qr/(?-xism:\G(\[.+))/
+  'function_object' => {
+    '+all' => [
+      {
+        '+rule' => 'function_signature',
+        '<' => '?'
+      },
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)*\{(?:[\ \t]|\r?\n|\#.*\r?\n)*)/
+      },
+      {
+        '+any' => [
+          {
+            '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)+)/
+          },
+          {
+            '+rule' => 'assignment_statement'
+          },
+          {
+            '+rule' => 'code_statement'
+          }
+        ],
+        '<' => '*'
+      },
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)*\})/
+      }
+    ]
+  },
+  'function_signature' => {
+    '+all' => [
+      {
+        '+re' => qr/(?-xism:\G\((?:[\ \t]|\r?\n|\#.*\r?\n)*)/
+      },
+      {
+        '+rule' => 'function_variables',
+        '<' => '?'
+      },
+      {
+        '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)*\))/
+      }
+    ]
+  },
+  'function_variable' => {
+    '+re' => qr/(?-xism:\G([a-zA-Z]\w*))/
+  },
+  'function_variables' => {
+    '+all' => [
+      {
+        '+rule' => 'function_variable'
+      },
+      {
+        '+all' => [
+          {
+            '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)*,(?:[\ \t]|\r?\n|\#.*\r?\n)*)/
+          },
+          {
+            '+rule' => 'function_variable'
+          }
+        ],
+        '<' => '*'
+      }
+    ]
   },
   'lines_point' => {
     '+all' => [
@@ -220,42 +342,11 @@ sub grammar_tree {
       }
     ]
   },
-  'meta_section' => {
-    '+all' => [
-      {
-        '+re' => qr/(?-xism:\G(?:\#.*\r?\n|[\ \t]*\r?\n)*)/
-      },
-      {
-        '+any' => [
-          {
-            '+rule' => 'meta_testml_statement'
-          },
-          {
-            '+error' => 'No TestML meta directive found'
-          }
-        ]
-      },
-      {
-        '+any' => [
-          {
-            '+rule' => 'meta_statement'
-          },
-          {
-            '+rule' => 'comment'
-          },
-          {
-            '+rule' => 'blank_line'
-          }
-        ],
-        '<' => '*'
-      }
-    ]
+  'number' => {
+    '+re' => qr/(?-xism:\G([0-9]+))/
   },
-  'meta_statement' => {
-    '+re' => qr/(?-xism:\G%((?:(?:Title|Data|Plan|BlockMarker|PointMarker)|[a-z]\w*)):[\ \t]+((?:(?:'(([^\n\\']|\\'|\\\\)*?)')|(?:"(([^\n\\"]|\\"|\\\\|\\[0nt])*?)")|([^\ \t\n\#](?:[^\n\#]*[^\ \t\n\#])?)))(?:[\ \t]+\#.*\r?\n|\r?\n))/
-  },
-  'meta_testml_statement' => {
-    '+re' => qr/(?-xism:\G%TestML:[\ \t]+(([0-9]\.[0-9]+))(?:[\ \t]+\#.*\r?\n|\r?\n))/
+  'number_object' => {
+    '+rule' => 'number'
   },
   'phrase_point' => {
     '+all' => [
@@ -282,9 +373,6 @@ sub grammar_tree {
       }
     ]
   },
-  'point_call' => {
-    '+re' => qr/(?-xism:\G(\*[a-z]\w*))/
-  },
   'point_lines' => {
     '+re' => qr/(?-xism:\G((?:(?!===|---).*\r?\n)*))/
   },
@@ -292,7 +380,10 @@ sub grammar_tree {
     '+re' => qr/(?-xism:\G---)/
   },
   'point_name' => {
-    '+re' => qr/(?-xism:\G([a-z]\w*))/
+    '+re' => qr/(?-xism:\G([a-z]\w*|[A-Z]\w*))/
+  },
+  'point_object' => {
+    '+re' => qr/(?-xism:\G(\*[a-z]\w*))/
   },
   'point_phrase' => {
     '+re' => qr/(?-xism:\G(([^\ \t\n\#](?:[^\n\#]*[^\ \t\n\#])?)))/
@@ -307,84 +398,24 @@ sub grammar_tree {
       }
     ]
   },
+  'semicolon' => {
+    '+any' => [
+      {
+        '+re' => qr/(?-xism:\G;)/
+      },
+      {
+        '+error' => 'You seem to be missing a semicolon'
+      }
+    ]
+  },
   'single_quoted_string' => {
     '+re' => qr/(?-xism:\G(?:'(([^\n\\']|\\'|\\\\)*?)'))/
   },
-  'string_call' => {
+  'string_object' => {
     '+rule' => 'quoted_string'
   },
-  'sub_expression' => {
-    '+any' => [
-      {
-        '+rule' => 'point_call'
-      },
-      {
-        '+rule' => 'string_call'
-      },
-      {
-        '+rule' => 'transform_call'
-      }
-    ]
-  },
-  'test_expression' => {
-    '+all' => [
-      {
-        '+rule' => 'sub_expression'
-      },
-      {
-        '+all' => [
-          {
-            '+not' => 'assertion_call_test'
-          },
-          {
-            '+rule' => 'call_indicator'
-          },
-          {
-            '+rule' => 'sub_expression'
-          }
-        ],
-        '<' => '*'
-      }
-    ]
-  },
-  'test_section' => {
-    '+any' => [
-      {
-        '+rule' => 'ws'
-      },
-      {
-        '+rule' => 'test_statement'
-      }
-    ],
-    '<' => '*'
-  },
-  'test_statement' => {
-    '+all' => [
-      {
-        '+rule' => 'test_expression'
-      },
-      {
-        '+rule' => 'assertion_call',
-        '<' => '?'
-      },
-      {
-        '+any' => [
-          {
-            '+re' => qr/(?-xism:\G;)/
-          },
-          {
-            '+error' => 'You seem to be missing a semicolon'
-          }
-        ]
-      }
-    ]
-  },
-  'testml_data_section' => {
-    '+rule' => 'data_block',
-    '<' => '*'
-  },
   'transform_argument' => {
-    '+rule' => 'sub_expression'
+    '+rule' => 'code_expression'
   },
   'transform_argument_list' => {
     '+all' => [
@@ -418,17 +449,6 @@ sub grammar_tree {
       }
     ]
   },
-  'transform_call' => {
-    '+all' => [
-      {
-        '+rule' => 'transform_name'
-      },
-      {
-        '+rule' => 'transform_argument_list',
-        '<' => '?'
-      }
-    ]
-  },
   'transform_name' => {
     '+any' => [
       {
@@ -439,20 +459,38 @@ sub grammar_tree {
       }
     ]
   },
+  'transform_object' => {
+    '+all' => [
+      {
+        '+rule' => 'transform_name'
+      },
+      {
+        '+rule' => 'transform_argument_list',
+        '<' => '?'
+      }
+    ]
+  },
+  'unit_call' => {
+    '+all' => [
+      {
+        '+not' => 'assertion_call_test'
+      },
+      {
+        '+rule' => 'call_indicator'
+      },
+      {
+        '+rule' => 'code_object'
+      }
+    ]
+  },
   'unquoted_string' => {
     '+re' => qr/(?-xism:\G([^\ \t\n\#](?:[^\n\#]*[^\ \t\n\#])?))/
   },
   'user_transform' => {
     '+re' => qr/(?-xism:\G([a-z]\w*))/
   },
-  'ws' => {
-    '+re' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n))/
-  },
-  'xml_data_section' => {
-    '+re' => qr/(?-xism:\G(<.+))/
-  },
-  'yaml_data_section' => {
-    '+re' => qr/(?-xism:\G(---[\ \t]*\r?\n.+))/
+  'variable_name' => {
+    '+re' => qr/(?-xism:\G([a-zA-Z]\w*))/
   }
 };
 }

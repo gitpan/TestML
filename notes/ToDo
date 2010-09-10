@@ -1,0 +1,64 @@
++ Clean up assert_* functions
++ Meta data goes in global variable stash.
++ Title, Plan and Data can become variables
++ Split standard
++ Move TestML setup into M:I:T
++ Remove Data from AST
++ Move Object into AST
++ Add functions to document
++ Make current parse create a top level function
++ Move functions and vars into namespace
++ Make functions into objects of type -> Func.
++ True, False and None are constant variables
++ Fix M:I:T to use new module set.
++ Parse data in a separate parse.
++ Localize data to a function
++ Rename TestML::Parser::Grammar to TestML::Grammar
++ Delete t/runner.t
++ Put TestML::AST into TestML::Runtime
++ Rename TestML::Transform::* -> TestML::Library
++ True/False/None can be singleton objects
++ Make TestML::Object::type a method that returns type based on class.
++ Add getvar / setvar in Function for variable access.
++ Redo grammar to match current terminology. like get rid of meta section, for example.
++ Add input arguments to functions
++ Support function definitions
++ Make bare functions callable by '.' or '()'
+
+== Language Model
+- Move TestML::Runtime::TAP to TestML::Adapter::TAP
+- Make assertions into regular function calls.
+
+== Compiler
+- Add and honor #line numbers in preprocessor.
+- Add line numbers to the AST
+- Add line numbers and context to error messages.
+
+== Functions
+- Allow functions to return values.
+
+== Refactoring
+- Rename transform to 'call'
+  - expression: <object> <call>*
+
+== Debugging
+- XXX, et al are not reporting the correct line they came from.
+
+== Standard
+- Add a standard transform for data parse
+
+- Allow quotes for line points
+- Support Native objects
+
+== Tests
+- Data types
+- List assertions
+- Standard string transforms
+- Standard list transforms
+- Functions
+
+== Application Tests
+- from glossary
+- from test::base
+- from testml-pm6 tests
+- convert yaml::xs

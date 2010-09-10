@@ -2,9 +2,10 @@ use TestML -run, -bridge => 't::Bridge';
 
 __DATA__
 
-%TestML: 1.0
-%Title: Ingy's Test
-%Plan: 4
+%TestML 1.0
+
+Title = "Ingy's Test";
+Plan = 4;
 
 *foo == *bar;
 *bar == *foo;

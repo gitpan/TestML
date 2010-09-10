@@ -1,2 +1,3 @@
 use TestML -run,
-    -document => 'testml/assertions.tml';
+    -testml => 'testml/assertions.tml',
+    -bridge => 't::Bridge';

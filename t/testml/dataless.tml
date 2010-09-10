@@ -1,5 +1,8 @@
-%TestML: 1.0
-%Plan: 2
+%TestML 1.0
+
+Title = 'TestML with no data section';
+Plan = 2;
+Label = 'Test $TestNumber';
 
 'foo' == "foo";
 

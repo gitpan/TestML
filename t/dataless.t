@@ -1,2 +1,3 @@
 use TestML -run,
-    -document => 'testml/dataless.tml';
+    -testml => 'testml/dataless.tml',
+    -bridge => 't::Bridge';

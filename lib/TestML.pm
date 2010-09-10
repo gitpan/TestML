@@ -3,12 +3,31 @@ use strict;
 use warnings;
 use 5.006001;
 
-$TestML::VERSION = '0.11';
+use TestML::Runtime;
+
+$TestML::VERSION = '0.20';
+
+our @EXPORT = qw(str num bool list WWW XXX YYY ZZZ);
+
+our $DumpModule = 'YAML::XS';
+sub WWW { require XXX; local $XXX::DumpModule = $DumpModule; XXX::WWW(@_) }
+sub XXX { require XXX; local $XXX::DumpModule = $DumpModule; XXX::XXX(@_) }
+sub YYY { require XXX; local $XXX::DumpModule = $DumpModule; XXX::YYY(@_) }
+sub ZZZ { require XXX; local $XXX::DumpModule = $DumpModule; XXX::ZZZ(@_) }
+
+sub str { TestML::Str->new(value => $_[0]) }
+sub num { TestML::Num->new(value => $_[0]) }
+sub bool { TestML::Bool->new(value => $_[0]) }
+sub list { TestML::List->new(value => $_[0]) }
 
 sub import {
     my $run;
-    my $bridge = 'main';
-    my $document;
+    my $bridge = '';
+    my $testml;
+    my $skipped = 0;
+
+    strict->import;
+    warnings->import;
 
     if (@_ > 1 and $_[1] eq '-base') {
         goto &TestML::Base::import;
@@ -19,13 +38,40 @@ sub import {
         my $option = shift(@_);
         my $value = (@_ and $_[0] !~ /^-/) ? shift(@_) : '';
         if ($option eq '-run') {
-            $run = $value || 'TestML::Runner::TAP';
+            $run = $value || 'TestML::Runtime::TAP';
         }
+        # XXX - 2010-08-22
         elsif ($option eq '-document') {
-            $document = $value;
+            die "TestML '-document' option has been changed to '-testml'";
+        }
+        elsif ($option eq '-testml') {
+            $testml = $value;
         }
         elsif ($option eq '-bridge') {
             $bridge = $value;
+        }
+        # XXX skip_all should call skip_all() from runner subclass
+        elsif ($option eq '-skip_all') {
+            my $reason = $value;
+            die "-skip_all option requires a reason argument"
+                unless $reason;
+            $skipped = 1;
+            require Test::More;
+            Test::More::plan(
+                skip_all => $reason,
+            );
+        }
+        elsif ($option eq '-require_or_skip') {
+            my $module = $value;
+            die "-require_or_skip option requires a module argument"
+                unless $module and $module !~ /^-/;
+            eval "require $module; 1" or do {
+                $skipped = 1;
+                require Test::More;
+                Test::More::plan(
+                    skip_all => "$module failed to load"
+                );
+            } 
         }
         else {
             die "Unknown option '$option'";
@@ -34,17 +80,23 @@ sub import {
 
     sub END {
         no warnings;
+        return if $skipped;
         if ($run) {
             eval "require $run; 1" or die $@;
+            $bridge ||= 'main';
             $run->new(
-                document => ($document || \ *main::DATA),
+                testml => ($testml || \ *main::DATA),
                 bridge => $bridge,
             )->run();
         }
-        elsif ($document or $bridge) {
-            die "-document or -bridge option used without -run option\n";
+        elsif ($testml or $bridge) {
+            die "-testml or -bridge option used without -run option\n";
         }
     }
+
+    require Exporter;
+    @_ = ($pkg);
+    goto &Exporter::import;
 }
 
 1;
@@ -58,10 +110,10 @@ TestML - A Generic Software Testing Meta Language
 =head1 SYNOPSIS
 
     # file t/testml/encode.tml
-    %TestML: 1.0
+    %TestML 1.0
 
-    %Title: Tests for AcmeEncode
-    %Plan: 3
+    Title = 'Tests for AcmeEncode';
+    Plan = 3;
 
     *text.apply_rot13 == *rot13;
     *text.apply_md5   == *md5;
@@ -87,17 +139,17 @@ which is specified in the meta Plan statement in the document.
 
 To run this test you would have a normal test file that looks like this:
 
-    use TestML::Runner::TAP;
+    use TestML::Runtime::TAP;
 
-    TestML::Runner::TAP->new(
-        document => 'testml/encode.tml',
+    TestML::Runtime::TAP->new(
+        testml => 'testml/encode.tml',
         bridge => 't::Bridge',
     )->run();
 
 or more simply:
 
     use TestML -run,
-        -document => 'testml/encode.tml',
+        -testml => 'testml/encode.tml',
         -bridge => 't::Bridge';
 
 The apply_* transform functions are defined in the bridge class that is
