@@ -5,7 +5,7 @@ use 5.006001;
 
 use TestML::Runtime;
 
-$TestML::VERSION = '0.20';
+$TestML::VERSION = '0.21';
 
 our @EXPORT = qw(str num bool list WWW XXX YYY ZZZ);
 
@@ -20,11 +20,12 @@ sub num { TestML::Num->new(value => $_[0]) }
 sub bool { TestML::Bool->new(value => $_[0]) }
 sub list { TestML::List->new(value => $_[0]) }
 
+my $skipped;
 sub import {
     my $run;
     my $bridge = '';
     my $testml;
-    my $skipped = 0;
+    $skipped = 0;
 
     strict->import;
     warnings->import;
@@ -40,10 +41,6 @@ sub import {
         if ($option eq '-run') {
             $run = $value || 'TestML::Runtime::TAP';
         }
-        # XXX - 2010-08-22
-        elsif ($option eq '-document') {
-            die "TestML '-document' option has been changed to '-testml'";
-        }
         elsif ($option eq '-testml') {
             $testml = $value;
         }
@@ -51,15 +48,16 @@ sub import {
             $bridge = $value;
         }
         # XXX skip_all should call skip_all() from runner subclass
+        elsif ($option eq '-dev_test') {
+            if (-e 'inc' and not -e 'inc/.author') {
+                skip_all('This is a developer test');
+            }
+        }
         elsif ($option eq '-skip_all') {
             my $reason = $value;
             die "-skip_all option requires a reason argument"
                 unless $reason;
-            $skipped = 1;
-            require Test::More;
-            Test::More::plan(
-                skip_all => $reason,
-            );
+            skip_all($reason);
         }
         elsif ($option eq '-require_or_skip') {
             my $module = $value;
@@ -76,6 +74,16 @@ sub import {
         else {
             die "Unknown option '$option'";
         }
+    }
+
+    sub skip_all {
+        return if $skipped;
+        my $reason = shift;
+        $skipped = 1;
+        require Test::More;
+        Test::More::plan(
+            skip_all => $reason,
+        );
     }
 
     sub END {

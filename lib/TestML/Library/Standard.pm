@@ -61,7 +61,8 @@ sub List {
 
 sub Join {
     my $context = shift;
-    return join '', map $_->value, @{$context->list->value};
+    my $separator = @_ ? shift->value : '';
+    return join $separator, map $_->value, @{$context->list->value};
 }
 
 sub Strip {
@@ -80,6 +81,69 @@ sub Chomp {
     my $value = shift->str->value;
     chomp($value);
     return $value;
+}
+
+sub Has {
+    my $text = shift->value;
+    my $part = shift->value;
+    return bool(index($text, $part) >= 0);
+}
+
+sub RunCommand {
+    require Capture::Tiny;
+    my $context = shift;
+    my $arg = shift
+       or die "RunCommand requires an argument";
+    my $command = $arg->value;
+    chomp($command);
+    my $sub = sub {
+        system($command);
+    };
+    my ($stdout, $stderr) = Capture::Tiny::capture($sub);
+    $context->runtime->function->setvar('_Stdout', $stdout);
+    $context->runtime->function->setvar('_Stderr', $stderr);
+    return str('');
+}
+
+sub RmPath {
+    require File::Path;
+    my $context = shift;
+    my $arg = shift
+       or die "RmPath requires an argument";
+    my $path = $arg->value;
+    File::Path::rmtree($path);
+    return str('');
+}
+
+sub Stdout {
+    my $context = shift;
+    return $context->runtime->function->getvar('_Stdout');
+}
+
+sub Stderr {
+    my $context = shift;
+    return $context->runtime->function->getvar('_Stderr');
+}
+
+sub Chdir {
+    my $context = shift;
+    my $arg = shift
+       or die "Chdir requires an argument";
+    my $dir = $arg->value;
+    chdir $dir;
+    return str('');
+}
+
+sub Read {
+    my $context = shift;
+    my $arg = shift
+        or die "Read requires an argument";
+    my $file = $arg->value;
+    use Cwd;
+    open FILE, $file or die "Can't open $file for input in " . Cwd::cwd;
+    my $text = do { local $/; <FILE> };
+    close FILE;
+    return str($text);
 }
 
 1;

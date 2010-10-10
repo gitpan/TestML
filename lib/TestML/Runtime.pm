@@ -176,7 +176,7 @@ sub run_expression {
             $context = $callable;
         }
         else {
-            ZZZ $callable;
+            ZZZ $expression, $unit, $callable;
         }
     }
     if ($expression->error) {
@@ -260,32 +260,35 @@ sub compile_testml {
 
 sub load_variables {
     my $self = shift;
-    $self->function->setvar(Block => TestML::Block->new);
-    $self->function->setvar(Label => TestML::Str->new(value => '$BlockLabel'));
-    $self->function->setvar(True => $TestML::Constant::True);
-    $self->function->setvar(False => $TestML::Constant::False);
-    $self->function->setvar(None => $TestML::Constant::None);
+    my $global = $self->function->outer;
+    $global->setvar(Block => TestML::Block->new);
+    $global->setvar(Label => TestML::Str->new(value => '$BlockLabel'));
+    $global->setvar(True => $TestML::Constant::True);
+    $global->setvar(False => $TestML::Constant::False);
+    $global->setvar(None => $TestML::Constant::None);
 }
 
 sub load_transform_module {
     my $self = shift;
-    my $module = shift;
-    if ($module ne 'main') {
-        eval "require $module; 1"
-            or die "Can't use $module:\n$@";
+    my $module_name = shift;
+    if ($module_name ne 'main') {
+        eval "require $module_name; 1"
+            or die "Can't use $module_name:\n$@";
     }
+
+    my $global = $self->function->outer;
     no strict 'refs';
-    for my $key (sort keys %{"$module\::"}) {
+    for my $key (sort keys %{"$module_name\::"}) {
         next if $key eq "\x16";
-        my $glob = ${"$module\::"}{$key};
+        my $glob = ${"$module_name\::"}{$key};
         if (my $function = *$glob{CODE}) {
-            $self->function->setvar(
+            $global->setvar(
                 $key => TestML::Native->new(value => $function),
             );
         }
         elsif (my $object = *$glob{SCALAR}) {
             if (ref($$object)) {
-                $self->function->setvar($key => $$object);
+                $global->setvar($key => $$object);
             }
         }
     }
@@ -342,7 +345,6 @@ use TestML::Base -base;
 
 has 'type' => 'Func';       # Functions are TestML typed objects
 # XXX Make this a featherweight reference.
-has 'outer';                # Parent/container function
 has 'signature' => [];      # Input variable names
 has 'namespace' => {};      # Lexical scoped variable stash
 has 'statements' => [];     # Exexcutable code statements
@@ -351,6 +353,9 @@ has 'data' => [];           # Data section scoped to this function
 # Runtime pointers to current objects.
 has 'expression';
 has 'block';
+
+my $outer = {};
+sub outer { @_ == 1 ? $outer->{$_[0]} : ($outer->{$_[0]} = $_[1]) }
 
 sub getvar {
     my $self = shift;

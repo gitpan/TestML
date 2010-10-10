@@ -39,7 +39,10 @@ sub compile {
         XXX($grammar->receiver->function);
     }
 
-    return $grammar->receiver->function;
+    my $function = $grammar->receiver->function;
+    $function->outer(TestML::Function->new());
+
+    return $function;
 }
 
 sub preprocess {
@@ -73,12 +76,18 @@ sub preprocess {
                     unless $value =~ /^\d+\.\d+$/;
                 die "More than one TestML directive found"
                     if $result->{TestML};
-                $result->{TestML} = $value;
+                $result->{TestML} = TestML::Str->new(value => $value);
                 next;
             }
             $order_error = 1 unless $result->{TestML};
             if ($directive eq 'Include') {
-                $text .= $self->preprocess($self->slurp($value))->{text};
+                my $sub_result = $self->preprocess($self->slurp($value));
+                $text .= $sub_result->{text};
+                $result->{DataMarker} = $sub_result->{DataMarker};
+                $result->{BlockMarker} = $sub_result->{BlockMarker};
+                $result->{PointMarker} = $sub_result->{PointMarker};
+                die "Can't define %TestML in an Included file"
+                    if $sub_result->{TestML};
             }
             elsif ($directive =~ /^(DataMarker|BlockMarker|PointMarker)$/) {
                 $result->{$directive} = $value;
@@ -99,7 +108,7 @@ sub preprocess {
 
     if ($top) {
         die "No TestML directive found"
-            if $top and not $result->{TestML};
+            unless $result->{TestML};
         die "%TestML directive must be the first (non-comment) statement"
             if $order_error;
 

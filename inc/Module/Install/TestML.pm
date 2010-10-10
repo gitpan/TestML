@@ -46,7 +46,7 @@ sub testml_setup {
         unless $config;
     die "'$config' is not an existing file"
         unless -f $config;
-    print "Updating testml files...\n";
+    print "testml_setup\n";
     require TestML::Setup;
     TestML::Setup::testml_setup($config);
 }
