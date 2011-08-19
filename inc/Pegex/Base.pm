@@ -1,7 +1,8 @@
+#line 1
 ### This module was derived from Gloom - the Great Little OO Module!
 ### Read `perldoc Gloom` for more information.
 
-package TestML::Base;
+package Pegex::Base;
 
 use 5.008003;
 use strict;
