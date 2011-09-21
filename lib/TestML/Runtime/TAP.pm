@@ -1,9 +1,19 @@
 package TestML::Runtime::TAP;
-use TestML::Runtime -base;
+use TestML::Mo;
+extends 'TestML::Runtime';
 
 use Test::Builder;
 
-has 'test_builder' => -init => 'Test::Builder->new';
+if ($TestML::Test::Differences) {
+    no warnings 'redefine';
+    require Test::Differences;
+    *Test::Builder::is_eq = sub {
+        my $self = shift;
+        \&Test::Differences::eq_or_diff(@_);
+    };
+}
+
+has test_builder => default => sub { Test::Builder->new };
 
 sub title {
     my $self = shift;

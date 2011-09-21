@@ -5,6 +5,7 @@ use TestML;
 sub Point {
     my $context = shift;
     my $name = shift;
+    $name = $name->value if ref $name;
     my $value = $context->runtime->function->getvar('Block')->points->{$name};
     if ($value =~ s/\n+\z/\n/ and $value eq "\n") {
         $value = '';
@@ -147,6 +148,16 @@ sub Read {
     return str($text);
 }
 
+sub Print {
+    my $context = shift;
+    my $arg = shift;
+    print STDOUT $arg ? $arg->value : $context->value;
+}
+
+sub Pass {
+    return @_;
+}
+
 1;
 
 # sub Context {
@@ -213,6 +224,3 @@ sub Read {
 #     return $context->runtime->block->points->{$point};
 # }
 # 
-# sub Select {
-#     return (shift)->value;
-# }

@@ -1,21 +1,15 @@
-use lib "../../pegex-pm/lib";
-# use Pegex::Compiler;
-use Pegex::Compiler::Bootstrap;
+use Pegex::Compiler;
 
-open IN, shift or die;
-my $testml = do {local $/; <IN>};
-# my $perl = Pegex::Compiler->compile($testml)->combinate->to_perl;
-my $perl = Pegex::Compiler::Bootstrap->compile($testml)->combinate->to_perl; # XXX
+my $perl = Pegex::Compiler->compile(shift)->to_perl;
 chomp($perl);
+$perl =~ s/^/  /gm;
 
 print <<"...";
 package TestML::Grammar;
-use base 'Pegex::Grammar';
+use TestML::Mo;
+extends 'Pegex::Grammar';
 
-sub grammar_tree {
-    return +$perl;
+sub tree_ {
+$perl
 }
-
-1;
 ...
-
