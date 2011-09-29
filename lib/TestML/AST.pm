@@ -6,17 +6,12 @@ use TestML::Runtime;
 
 has points => default => sub{[]};
 has function => default => sub { TestML::Function->new };
-use constant wrap => 1;
 
 # sub final {
 #     my ($self, $match, $top) = @_;
 #     XXX $match;
 # }
 # __END__
-
-# sub got_testml_document {
-#     my ($self, $document) = @_;
-# }
 
 sub got_code_section {
     my ($self, $code) = @_;
@@ -31,7 +26,7 @@ sub got_assignment_statement {
                 TestML::Transform->new(
                     name => 'Set',
                     args => [
-                        $match->[0]{variable_name},
+                        $match->[0],
                         $match->[1],
                     ],
                 ),
@@ -75,35 +70,32 @@ sub got_code_expression {
     );
 }
 
-sub got_code_object {
-    my ($self, $code) = @_;
-    if (exists $code->{point_object}) {
-        my $name = $code->{point_object};
-        $name =~ s/^\*// or die;
-        push @{$self->points}, $name;
-        return TestML::Transform->new(
-            name => 'Point',
-            args => [$name],
-        );
-    }
-    if (my $transform = $code->{transform_object}) {
-        return $transform;
-    }
-    if (my $string = $code->{string_object}) {
-        return $self->make_str($string);
-    }
-    if (my $number = $code->{number_object}) {
-        return TestML::Num->new(
-            value => $number->{number},
-        );
-    }
-    else { $code }
+sub got_number_object {
+    my ($self, $number) = @_;
+    return TestML::Num->new(
+        value => $number,
+    );
+}
+
+sub got_string_object {
+    my ($self, $string) = @_;
+    return $self->make_str($string);
+}
+
+sub got_point_object {
+    my ($self, $point) = @_;
+    $point =~ s/^\*// or die;
+    push @{$self->points}, $point;
+    return TestML::Transform->new(
+        name => 'Point',
+        args => [$point],
+    );
 }
 
 sub make_str {
     my ($self, $object) = @_;
     return TestML::Str->new(
-        value => $object->{quoted_string},
+        value => $object,
     );
 }
 sub got_assertion_call {
@@ -156,21 +148,9 @@ sub got_function_object {
     return $function;
 }
 
-sub got_function_variables {
-    my ($self, $variables) = @_;
-    my $vars = [];
-    push @$vars, $variables->[0]{function_variable};
-    push @$vars, map $_->[0]{function_variable}, @{$variables->[1]};
-    return $vars;
-}
-
 sub got_transform_name {
     my ($self, $match) = @_;
-    my $transform;
-    if ($transform = $match->{core_transform} || $match->{user_transform}) {
-        return TestML::Transform->new(name => $transform);
-    }
-    else { XXX $match }
+    return TestML::Transform->new(name => $match);
 }
 
 sub got_transform_object {
@@ -181,9 +161,7 @@ sub got_transform_object {
         splice @{$object->[1]}, -1, 1;
     }
     my $args = [];
-    push @$args, $object->[1][0][0],
-        if $object->[1][0][0];
-    push @$args, map $_->[0], @{$object->[1][0][1]};
+    $args = $object->[1][0] if $object->[1][0];
     $transform->args($args) if @$args;
     return $transform;
 }
@@ -194,18 +172,6 @@ sub got_transform_argument_list {
     return $list;
 }
 
-sub got_transform_argument {
-    my ($self, $arg) = @_;
-    return $arg;
-}
-
-sub got_unquoted_string {
-    my ($self, $match) = @_;
-    return $match;
-}
-
-sub got_semicolon { return }
-
 #----------------------------------------------------------
 sub got_data_section {
     my ($self, $data) = @_;
@@ -215,22 +181,15 @@ sub got_data_section {
 sub got_data_block {
     my ($self, $block) = @_;
     return TestML::Block->new(
-        label => $block->[0]{block_header}[0][0]{block_label},
+        label => $block->[0][0][0],
         points => +{map %$_, @{$block->[1]}},
     );
 }
 
-sub got_lines_point {
+sub got_block_point {
     my ($self, $point) = @_;
     return {
-        $point->[0]{point_name} => $point->[1]{point_lines},
-    };
-}
-
-sub got_phrase_point {
-    my ($self, $point) = @_;
-    return {
-        $point->[0]{point_name} => $point->[1]{point_phrase},
+        $point->[0] => $point->[1],
     };
 }
 

@@ -7,7 +7,7 @@ blank_line: /<BLANK>*<EOL>/
 comment: /<HASH><line>/
 ws: /(?:<BLANK>|<EOL>|<comment>)/
 
-quoted_string: -<single_quoted_string> | -<double_quoted_string>
+quoted_string: <single_quoted_string> | <double_quoted_string>
 
 single_quoted_string: /(?:<SINGLE>((?:[^<BREAK><BACK><SINGLE>]|<BACK><SINGLE>|<BACK><BACK>)*?)<SINGLE>)/
 
@@ -39,7 +39,7 @@ semicolon:
 
 code_expression:
   <code_object>
-  -<unit_call>*
+  <unit_call>*
 
 unit_call:
   !<assertion_call_test>
@@ -54,7 +54,7 @@ code_object:
   <transform_object>
 
 function_object:
-  -<function_signature>?
+  <function_signature>?
   <function_start>
   [ /<ws>+/ | <assignment_statement> | <code_statement>]*
   /<ws>*<RCURLY>/
@@ -67,8 +67,7 @@ function_signature:
   /<ws>*<RPAREN>/
 
 function_variables: 
-  <function_variable>
-  [ /<ws>*<COMMA><ws>*/ <function_variable> ]*
+  <function_variable>+ % /<ws>*<COMMA><ws>*/
 
 function_variable: /(<ALPHA><WORD>*)/
 
@@ -92,20 +91,16 @@ call_indicator: /(?:<DOT><ws>*|<ws>*<DOT>)/
 
 transform_argument_list:
   /<LPAREN><ws>*/
-  -<transform_arguments>?
+  <transform_argument>* % /<ws>*<COMMA><ws>*/
   /<ws>*<RPAREN>/
-
-transform_arguments:
-  <transform_argument>
-  [ /<ws>*<COMMA><ws>*/ <transform_argument> ]*
 
 transform_argument: <code_expression>
 
 assertion_call_test: /<call_indicator>(?:EQ|OK|HAS)/
 
-assertion_call: <assertion_eq> | <assertion_ok> | <assertion_has>
+assertion_call: +<assertion_eq> | +<assertion_ok> | +<assertion_has>
 
-assertion_eq: <assertion_operator_eq> | <assertion_function_eq>
+assertion_eq: +<assertion_operator_eq> | +<assertion_function_eq>
 
 assertion_operator_eq:
   /<ws>+<EQUAL><EQUAL><ws>+/
@@ -120,7 +115,7 @@ assertion_ok: <assertion_function_ok>
 
 assertion_function_ok: /<call_indicator>(OK)<empty_parens>?/
 
-assertion_has: <assertion_operator_has> | <assertion_function_has>
+assertion_has: +<assertion_operator_has> | +<assertion_function_has>
 
 assertion_operator_has:
   /<ws>+<TILDE><TILDE><ws>+/
@@ -139,7 +134,7 @@ data_section: <data_block>*
 data_block:
   <block_header>
   .[ <blank_line> | <comment> ]*
-  -<block_point>*
+  <block_point>*
 
 block_header:
   <block_marker>
@@ -178,4 +173,4 @@ user_point_name:  /<LOWER><WORD>*/
 
 core_point_name:  /<UPPER><WORD>*/
 
-point_phrase: -<unquoted_string>
+point_phrase: <unquoted_string>

@@ -13,13 +13,13 @@ use 5.006001;
 use strict;
 use warnings;
 
-use Pegex 0.13 ();
+use Pegex 0.18 ();
 
 package TestML;
 
 use TestML::Runtime;
 
-our $VERSION = '0.23';
+our $VERSION = '0.24';
 
 use constant XXX_skip => 1;
 our $DumpModule = 'YAML::XS';

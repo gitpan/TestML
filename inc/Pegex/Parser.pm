@@ -1,5 +1,5 @@
 #line 1
-#u
+##
 # name:      Pegex::Parser
 # abstract:  Pegex Parser Runtime
 # author:    Ingy döt Net <ingy@cpan.org>
@@ -25,8 +25,8 @@ has 'receiver' => default => sub {
 
 # Parser options
 has 'throw_on_error' => default => sub {1};
-# Allow a partial parse
-has 'partial' => default => sub {0};
+# # Allow a partial parse
+# has 'partial' => default => sub {0};
 # Wrap results in hash with rule name for key
 has 'wrap' => default => sub { $_[0]->receiver->wrap };
 
@@ -109,13 +109,24 @@ sub match {
     return $match;
 }
 
+sub get_min_max {
+    my ($self, $next) = @_;
+    defined($next->{'+min'})
+    ? defined($next->{'+max'})
+        ? (@{$next}{qw'+min +max'})
+        : ($next->{'+min'}, 0)
+    : defined($next->{'+max'})
+        ? (0, $next->{'+max'})
+        : (1, 1);
+}
+
 sub match_next {
     my ($self, $next) = @_;
 
     return $self->match_next_with_sep($next)
         if $next->{'.sep'};
 
-    my $quantity = $next->{'+qty'} || '1';
+    my ($min, $max) = $self->get_min_max($next);
     my $assertion = $next->{'+asr'} || 0;
     my ($rule, $kind) = map {($next->{".$_"}, $_)}
         grep {$next->{".$_"}} qw(ref rgx all any err) or XXX $next;
@@ -126,13 +137,13 @@ sub match_next {
         $position = $self->position unless $assertion;
         $count++;
         push @$match, @$return;
-        last if $quantity =~ /^[1?]$/;
+        last if $max == 1;
     }
-    if ($quantity =~ /^[+*]$/) {
-        $match = [$match]; # if $count;
+    if ($max != 1) {
+        $match = [$match];
         $self->position($position);
     }
-    my $result = (($count or $quantity =~ /^[?*]$/) ? 1 : 0)
+    my $result = (($count >= $min and (not $max or $count <= $max)) ? 1 : 0)
         ^ ($assertion == -1);
     $self->position($position)
         if not($result) or $assertion;
@@ -144,29 +155,35 @@ sub match_next {
 sub match_next_with_sep {
     my ($self, $next) = @_;
 
-    my $quantity = $next->{'+qty'} || '1';
+    my ($min, $max) = $self->get_min_max($next);
     my ($rule, $kind) = map {($next->{".$_"}, $_)}
         grep {$next->{".$_"}} qw(ref rgx all any err) or XXX $next;
-
     my $separator = $next->{'.sep'};
-    my ($sep_rule, $sep_kind) = map {($separator->{".$_"}, $_)}
-        grep {$separator->{".$_"}} qw(ref rgx all any err) or XXX $separator;
 
-    my ($match, $position, $count, $sep_count, $method, $sep_method) =
-        ([], $self->position, 0, 0, "match_$kind", "match_$sep_kind");
+    my ($match, $position, $count, $method, $scount, $smin, $smax) =
+        ([], $self->position, 0, "match_$kind", 0,
+            $self->get_min_max($separator));
     while (my $return = $self->$method($rule, $next)) {
         $position = $self->position;
         $count++;
         push @$match, @$return;
-        $return = $self->$sep_method($sep_rule, $separator) or last;
-        push @$match, @$return;
-        $sep_count++;
+        $return = $self->match_next($separator) or last;
+        my @return = @$return;
+        if (@return) {
+            @return = @{$return[0]} if $smax != 1;
+            push @$match, @return;
+        }
+        $scount++;
     }
-    return ($quantity eq '?') ? [$match] : 0 unless $count;
-    $self->position($position) if $count == $sep_count;
+    if ($max != 1) {
+        $match = [$match];
+    }
+    my $result = (($count >= $min and (not $max or $count <= $max)) ? 1 : 0);
+    $self->position($position)
+        if $count == $scount and not $separator->{'+eok'};
 
-    return [] if $next->{'-skip'};
-    return [$match];
+    $match = [] if $next->{'-skip'};
+    return ($result ? $match : 0);
 }
 
 sub match_ref {
@@ -237,7 +254,7 @@ sub match_all {
 }
 
 sub match_any {
-    my ($self, $list) = @_;
+    my ($self, $list, $parent) = @_;
     for my $elem (@$list) {
         if (my $match = $self->match_next($elem)) {
             return $match;
