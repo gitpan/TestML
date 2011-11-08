@@ -28,4 +28,4 @@ resources:
     type: git
     url: git://github.com/ingydotnet/testml-pm.git
     web: https://github.com/ingydotnet/testml-pm/tree
-version: 0.25
+version: 0.26
