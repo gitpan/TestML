@@ -3,11 +3,12 @@ abstract: 'A Generic Software Testing Meta Language'
 author:
   - 'Ingy döt Net <ingy@cpan.org>'
 build_requires:
-  ExtUtils::MakeMaker: 6.42
+  ExtUtils::MakeMaker: 6.59
 configure_requires:
-  ExtUtils::MakeMaker: 6.42
+  ExtUtils::MakeMaker: 6.59
 distribution_type: module
-generated_by: 'Module::Install version 1.02'
+dynamic_config: 1
+generated_by: 'Module::Install version 1.06'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -19,7 +20,7 @@ no_index:
     - inc
     - t
 requires:
-  Pegex: 0.19
+  Pegex: 0.20
   perl: 5.6.1
 resources:
   homepage: https://github.com/ingydotnet/testml-pm/tree
@@ -28,4 +29,4 @@ resources:
     type: git
     url: git://github.com/ingydotnet/testml-pm.git
     web: https://github.com/ingydotnet/testml-pm/tree
-version: 0.26
+version: 0.27

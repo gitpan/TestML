@@ -38,14 +38,12 @@ lib/TestML/Mo.pod
 lib/TestML/Runtime.pm
 lib/TestML/Runtime/TAP.pm
 lib/TestML/Setup.pm
+lib/TestML/Setup.pod
 LICENSE
 Makefile.PL
 MANIFEST			This list of files
 META.yml
 README
-src/grammar.pl
-src/Makefile
-src/testml.pgx
 t/arguments.t
 t/assertions.t
 t/ast.pl
@@ -97,4 +95,6 @@ t/testml/truth.tml
 t/testml/types.tml
 t/truth.t
 t/types.t
+t/xxx.t
 t/yaml-tests.t
+vim-test

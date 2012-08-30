@@ -3,9 +3,11 @@ package TestML::Grammar;
 use TestML::Mo;
 extends 'Pegex::Grammar';
 
-sub tree_ {
+use constant file => '../testml-pgx/testml.pgx';
+
+sub make_tree {
   {
-    '+top' => 'testml_document',
+    '+toprule' => 'testml_document',
     'assertion_call' => {
       '.any' => [
         {
@@ -94,7 +96,7 @@ sub tree_ {
     'assertion_operator_has' => {
       '.all' => [
         {
-          '.rgx' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)+~~(?:[\ \t]|\r?\n|\#.*\r?\n)+)/
+          '.rgx' => qr/(?-xism:\G(?:[\ \t]|\r?\n|\#.*\r?\n)+\~\~(?:[\ \t]|\r?\n|\#.*\r?\n)+)/
         },
         {
           '.ref' => 'code_expression'
