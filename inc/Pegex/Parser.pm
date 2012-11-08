@@ -10,19 +10,22 @@
 # - Pegex::Receiver
 
 package Pegex::Parser;
-use Pegex::Mo;
+use Pegex::Base;
 
-use Scalar::Util;
 use Pegex::Input;
 
+use Scalar::Util;
+
 # Grammar object or class
-has 'grammar';
+has grammar => (required => 1);
+
 # Receiver object or class
-has 'receiver' => (
+has receiver => (
     default => sub {
         require Pegex::Receiver;
         Pegex::Receiver->new();
     },
+    lazy => 1,
 );
 
 #
@@ -30,24 +33,22 @@ has 'receiver' => (
 #
 
 # Allow errors to not be thrown
-has 'throw_on_error' => ( default => sub {1} );
-
-# Wrap results in hash with rule name for key
-has 'wrap' => ( default => sub { $_[0]->receiver->wrap } );
+has throw_on_error => 1;
 
 # # Allow a partial parse
-# has 'partial' => default => sub {0};
+# has 'partial' => 0;
 
 # Internal properties.
-has 'input';                # Input object to read from
-has 'buffer';               # Input buffer to parse
-has 'error';                # Error message goes here
-has 'position' => (         # Current position in buffer
-    default => sub {0},
-);
-has 'farthest' => (         # Farthest point matched in buffer
-    default => sub {0},
-);
+has input => ();            # Input object to read from
+has buffer => ();           # Input buffer to parse
+has length => ();           # Length of buffer
+has error => ();            # Error message goes here
+has position => 0;          # Current position in buffer
+has farthest => 0;          # Farthest point matched in buffer
+has optimized => 0;         # Parser object has been optimized
+
+has rule => ();             # The current rule name.
+has parent => ();           # The grammar object pointing to the current rule.
 
 # Debug the parsing of input.
 has 'debug' => (
@@ -63,81 +64,119 @@ sub BUILD {
     my $grammar = $self->grammar;
     my $receiver = $self->receiver;
     if ($grammar and not ref $grammar) {
-        $self->grammar($grammar->new);
+        eval "require $grammar";
+        $self->{grammar} = $grammar->new;
     }
     if ($receiver and not ref $receiver) {
-        $self->receiver($receiver->new);
+        eval "require $receiver";
+        $self->{receiver} = $receiver->new;
     }
 }
 
 sub parse {
-    my ($self, $input, $start_rule) = @_;
+    my ($self, $input, $start) = @_;
+    $self->{position} = 0; # XXX Currently needed for repeated calls.
 
-    die "Usage: " . ref($self) . '->parse($input [, $start_rule]'
+    die 'Usage: ->parse($input [, $start_rule]'
         unless 2 <= @_ and @_ <= 3;
 
-    $input = Pegex::Input->new(string => $input)->open
+    $input = Pegex::Input->new(string => $input)
         unless ref $input and UNIVERSAL::isa($input, 'Pegex::Input');
 
-    $self->input($input);
+    $self->{input} = $input;
 
-    $self->buffer($self->input->read);
+    $self->{input}->open unless $self->{input}{_is_open};
+    $self->{buffer} = $self->{input}->read;
+    $self->{length} = length ${$self->{buffer}};
 
-    my $grammar = $self->grammar
+    my $grammar = $self->{grammar}
         or die "No 'grammar'. Can't parse";
 
-    $start_rule ||=
-        $grammar->tree->{'+toprule'} ||
-        ($grammar->tree->{'TOP'} ? 'TOP' : undef)
+    my $tree = $self->{tree} = $grammar->{tree} //= $grammar->make_tree;
+
+    my $start_rule_ref = $start ||
+        $tree->{'+toprule'} ||
+        ($tree->{'TOP'} ? 'TOP' : undef)
             or die "No starting rule for Pegex::Parser::parse";
 
-    my $receiver = $self->receiver
+    $self->optimize_grammar($start_rule_ref);
+
+    my $receiver = $self->{receiver}
         or die "No 'receiver'. Can't parse";
 
     # Add circular ref and weaken it.
-    $self->receiver->parser($self);
-    Scalar::Util::weaken($self->receiver->{parser});
+    $self->{receiver}{parser} = $self;
+    Scalar::Util::weaken($self->{receiver}{parser});
 
-    # Do the parse
-    my $match = $self->match($start_rule) or return;
+    if ($self->{receiver}->can("initial")) {
+        @{$self}{'rule', 'parent'} = ($start_rule_ref, {});
+        $self->{receiver}->initial();
+    }
 
-    # Parse was successful!
-    $self->input->close;
-    return ($self->receiver->data || $match);
-}
+    my $match = $self->match_ref($start_rule_ref, {});
 
-sub match {
-    my ($self, $rule) = @_;
+    $self->{input}->close;
 
-    $self->receiver->initial($rule)
-        if $self->receiver->can("initial");
-
-    my $match = $self->match_next({'.ref' => $rule});
-    if (not $match or $self->position < length($self->buffer)) {
+    if (not $match or $self->{position} < $self->{length}) {
         $self->throw_error("Parse document failed for some reason");
         return;  # In case $self->throw_on_error is off
     }
-    $match = $match->[0];
 
-    $match = $self->receiver->final($match, $rule)
-        if $self->receiver->can("final");
+    if ($self->{receiver}->can("final")) {
+        @{$self}{'rule', 'parent'} = ($start_rule_ref, {});
+        $match = [ $self->{receiver}->final(@$match) ];
+    }
 
-    $match = {$rule => []} unless $match;
-
-    $match = $match->{TOP} || $match if $rule eq 'TOP';
-
-    return $match;
+    return $match->[0];
 }
 
-sub get_min_max {
-    my ($self, $next) = @_;
-    defined($next->{'+min'})
-    ? defined($next->{'+max'})
-        ? (@{$next}{qw'+min +max'})
-        : ($next->{'+min'}, 0)
-    : defined($next->{'+max'})
-        ? (0, $next->{'+max'})
-        : (1, 1);
+sub optimize_grammar {
+    my ($self, $start) = @_;
+    return if $self->{optimized}++;
+    my $tree = $self->{tree};
+    for my $name (keys %$tree) {
+        my $node = $tree->{$name};
+        next unless ref($node);
+        $self->optimize_node($node);
+    }
+    $self->optimize_node({'.ref' => $start});
+}
+
+sub optimize_node {
+    my ($self, $node) = @_;
+
+    for (qw(ref rgx all any err code xxx)) {
+        die if $_ eq 'xxx';
+        if ($node->{rule} = $node->{".$_"}) {
+            $node->{kind} = $_;
+            $node->{method} = $self->can("match_$_") or die;
+            last;
+        }
+    }
+
+    my ($min, $max) = @{$node}{'+min', '+max'};
+    $node->{'+min'} //= defined($max) ? 0 : 1;
+    $node->{'+max'} //= defined($min) ? 0 : 1;
+    $node->{'+asr'} //= 0;
+
+    if ($node->{kind} =~ /(?:all|any)/) {
+        $self->optimize_node($_) for @{$node->{rule}};
+    }
+    elsif ($node->{kind} eq 'ref') {
+        my $ref = $node->{rule};
+        my $rule = $self->{tree}{$ref};
+        if (my $action = $self->{receiver}->can("got_$ref")) {
+            $rule->{action} = $action;
+        }
+        elsif (my $gotrule = $self->{receiver}->can("gotrule")) {
+            $rule->{action} = $gotrule;
+        }
+        $node->{method} = $self->can("match_ref_trace")
+            if $self->{debug};
+    }
+    if (my $sep = $node->{'.sep'}) {
+        $self->optimize_node($sep);
+    }
 }
 
 sub match_next {
@@ -146,49 +185,49 @@ sub match_next {
     return $self->match_next_with_sep($next)
         if $next->{'.sep'};
 
-    my ($min, $max) = $self->get_min_max($next);
-    my $assertion = $next->{'+asr'} || 0;
-    my ($rule, $kind) = map {($next->{".$_"}, $_)}
-        grep {$next->{".$_"}} qw(ref rgx all any err code) or XXX $next;
+    my ($rule, $method, $kind, $min, $max, $assertion) =
+        @{$next}{'rule', 'method', 'kind', '+min', '+max', '+asr'};
 
-    my ($match, $position, $count, $method) =
-        ([], $self->position, 0, "match_$kind");
+    my ($position, $match, $count) =
+        ($self->{position}, [], 0);
 
-    while (my $return = $self->$method($rule, $next)) {
-        $position = $self->position unless $assertion;
+    while (my $return = $method->($self, $rule, $next)) {
+        $position = $self->{position} unless $assertion;
         $count++;
         push @$match, @$return;
         last if $max == 1;
     }
     if ($max != 1) {
         $match = [$match];
-        $self->set_position($position);
+        if (($self->{position} = $position) > $self->{farthest}) {
+            $self->{farthest} = $position;
+        }
     }
     my $result = (($count >= $min and (not $max or $count <= $max)) ? 1 : 0)
         ^ ($assertion == -1);
-    $self->set_position($position)
-        if not($result) or $assertion;
+    if (not($result) or $assertion) {
+        if (($self->{position} = $position) > $self->{farthest}) {
+            $self->{farthest} = $position;
+        }
+    }
 
-    $match = [] if $next->{'-skip'};
-    return ($result ? $match : 0);
+    return ($result ? $next->{'-skip'} ? [] : $match : 0);
 }
 
 sub match_next_with_sep {
     my ($self, $next) = @_;
 
-    my ($min, $max) = $self->get_min_max($next);
-    my ($rule, $kind) = map {($next->{".$_"}, $_)}
-        grep {$next->{".$_"}} qw(ref rgx all any err) or XXX $next;
-    my $separator = $next->{'.sep'};
+    my ($rule, $method, $kind, $min, $max, $sep) =
+        @{$next}{'rule', 'method', 'kind', '+min', '+max', '.sep'};
 
-    my ($match, $position, $count, $method, $scount, $smin, $smax) =
-        ([], $self->position, 0, "match_$kind", 0,
-            $self->get_min_max($separator));
-    while (my $return = $self->$method($rule, $next)) {
-        $position = $self->position;
+    my ($position, $match, $count, $scount, $smin, $smax) =
+        ($self->{position}, [], 0, 0, @{$sep}{'+min', '+max'});
+
+    while (my $return = $method->($self, $rule, $next)) {
+        $position = $self->{position};
         $count++;
         push @$match, @$return;
-        $return = $self->match_next($separator) or last;
+        $return = $self->match_next($sep) or last;
         my @return = @$return;
         if (@return) {
             @return = @{$return[0]} if $smax != 1;
@@ -200,73 +239,49 @@ sub match_next_with_sep {
         $match = [$match];
     }
     my $result = (($count >= $min and (not $max or $count <= $max)) ? 1 : 0);
-    $self->set_position($position)
-        if $count == $scount and not $separator->{'+eok'};
-
-    $match = [] if $next->{'-skip'};
-    return ($result ? $match : 0);
-}
-
-sub match_ref {
-    my ($self, $ref, $parent) = @_;
-    my $rule = $self->grammar->tree->{$ref};
-    $rule ||= $self->can("match_rule_$ref")
-            ? { '.code' => $ref }
-            : die "\n\n*** No grammar support for '$ref'\n\n";
-
-    my $trace = (not $rule->{'+asr'} and $self->debug);
-    $self->trace("try_$ref") if $trace;
-
-    my $match = (ref($rule) eq 'CODE')
-        ? $self->$rule()
-        : $self->match_next($rule);
-    if ($match) {
-        $self->trace("got_$ref") if $trace;
-        if (not $rule->{'+asr'} and not $parent->{'-skip'}) {
-            if (my $sub = $self->receiver->can("got_$ref")) {
-                $match = [ $sub->($self->receiver, $match->[0]) ];
-            }
-            elsif (
-                $self->wrap ? not($parent->{'-pass'}) : $parent->{'-wrap'}
-            ) {
-                $match = [ @$match ? { $ref => $match->[0] } : () ];
-            }
+    if ($count == $scount and not $sep->{'+eok'}) {
+        if (($self->{position} = $position) > $self->{farthest}) {
+            $self->{farthest} = $position;
         }
     }
-    else {
-        $self->trace("not_$ref") if $trace;
-        $match = 0;
-    }
 
-    return $match;
+    return ($result ? $next->{'-skip'} ? [] : $match : 0);
 }
 
-my $xxx_terminator_hack = 0;
-my $xxx_terminator_max = 1000;
+my $dummy = [1];
+sub match_ref {
+    my ($self) = @_; # $self, $ref, $parent
+    my $rule = $self->{tree}{$_[1]};
+
+    my $match = $self->match_next($rule) or return 0;
+    return $dummy unless $rule->{action};
+    @{$self}{'rule', 'parent'} = @_[1,2];
+    [ $rule->{action}->($self->{receiver}, @$match) ];
+}
 
 sub match_rgx {
-    my ($self, $regexp, $parent) = @_;
+    my ($self, $regexp) = @_;
+    my $buffer = $self->{buffer};
 
-    my $start = pos($self->{buffer}) = $self->position;
-    # XXX A hack for non-terminating grammars. The grammar is bad, but without
-    # this hack, the parser will spin forever. Need to do this right.
-    die "Your grammar seems to not terminate at end of stream"
-        if $start >= length $self->{buffer}
-            and $xxx_terminator_hack++ > $xxx_terminator_max;
-    $self->{buffer} =~ /$regexp/g or return 0;
-    my $finish = pos($self->{buffer});
+    my $position = pos($$buffer) = $self->{position};
+
+    $$buffer =~ /$regexp/g or return 0;
+    $position = pos($$buffer);
+
     no strict 'refs';
     my $match = [ map $$_, 1..$#+ ];
     $match = [ $match ] if $#+ > 1;
 
-    $self->set_position($finish);
+    if (($self->{position} = $position) > $self->{farthest}) {
+        $self->{farthest} = $position;
+    }
 
     return $match;
 }
 
 sub match_all {
-    my ($self, $list, $parent) = @_;
-    my $pos = $self->position;
+    my ($self, $list) = @_;
+    my $position = $self->{position};
     my $set = [];
     my $len = 0;
     for my $elem (@$list) {
@@ -276,7 +291,9 @@ sub match_all {
             $len++;
         }
         else {
-            $self->set_position($pos);
+            if (($self->{position} = $position) > $self->{farthest}) {
+                $self->{farthest} = $position;
+            }
             return 0;
         }
     }
@@ -285,7 +302,7 @@ sub match_all {
 }
 
 sub match_any {
-    my ($self, $list, $parent) = @_;
+    my ($self, $list) = @_;
     for my $elem (@$list) {
         if (my $match = $self->match_next($elem)) {
             return $match;
@@ -305,10 +322,19 @@ sub match_code {
     return $self->$method();
 }
 
-sub set_position {
-    my ($self, $position) = @_;
-    $self->position($position);
-    $self->farthest($position) if $position > $self->farthest;
+sub match_ref_trace {
+    my ($self, $ref) = @_;
+    my $rule = $self->{tree}{$ref};
+    my $trace = not $rule->{'+asr'};
+    $self->trace("try_$ref") if $trace;
+    my $result;
+    if ($result = $self->match_ref($ref)) {
+        $self->trace("got_$ref") if $trace;
+    }
+    else {
+        $self->trace("not_$ref") if $trace;
+    }
+    return $result;
 }
 
 sub trace {
@@ -318,7 +344,7 @@ sub trace {
     $self->{indent}-- unless $indent;
     print STDERR ' ' x $self->{indent};
     $self->{indent}++ if $indent;
-    my $snippet = substr($self->buffer, $self->position);
+    my $snippet = substr(${$self->{buffer}}, $self->{position});
     $snippet = substr($snippet, 0, 30) . "..." if length $snippet > 30;
     $snippet =~ s/\n/\\n/g;
     print STDERR sprintf("%-30s", $action) .
@@ -328,27 +354,38 @@ sub trace {
 sub throw_error {
     my ($self, $msg) = @_;
     $self->format_error($msg);
-    return 0 unless $self->throw_on_error;
+    return 0 unless $self->{throw_on_error};
     require Carp;
-    Carp::croak($self->error);
+    Carp::croak($self->{error});
 }
 
 sub format_error {
     my ($self, $msg) = @_;
-    my $position = $self->farthest;
-    my $line = @{[substr($self->buffer, 0, $position) =~ /(\n)/g]} + 1;
-    my $column = $position - rindex($self->buffer, "\n", $position);
-    my $context = substr($self->buffer, $position, 50);
+    my $buffer = $self->{buffer};
+    my $position = $self->{farthest};
+    my $real_pos = $self->{position};
+
+    my $line = @{[substr($$buffer, 0, $position) =~ /(\n)/g]} + 1;
+    my $column = $position - rindex($$buffer, "\n", $position);
+
+    my $pretext = substr(
+        $$buffer,
+        $position < 50 ? 0 : $position - 50,
+        $position < 50 ? $position : 50
+    );
+    my $context = substr($$buffer, $position, 50);
+    $pretext =~ s/.*\n//gs;
     $context =~ s/\n/\\n/g;
-    $self->error(<<"...");
+
+    $@ = $self->{error} = <<"...";
 Error parsing Pegex document:
-  msg: $msg
-  line: $line
-  column: $column
-  context: "$context"
-  position: $position
+  msg:      $msg
+  line:     $line
+  column:   $column
+  context:  $pretext$context
+  ${\ (' ' x (length($pretext) + 10) . '^')}
+  position: $position ($real_pos pre-lookahead)
 ...
-    $@ = $self->error;
 }
 
 1;

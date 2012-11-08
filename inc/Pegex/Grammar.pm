@@ -7,13 +7,19 @@
 # copyright: 2010, 2011, 2012
 
 package Pegex::Grammar;
-use Pegex::Mo;
+use Pegex::Base;
 
 # Grammar can be in text or tree form. Tree will be compiled from text.
 # Grammar can also be stored in a file.
 has file => ();
-has text => (builder => 'make_text');
-has tree => (builder => 'make_tree');
+has text => (
+    builder => 'make_text',
+    lazy => 1,
+);
+has tree => (
+    builder => 'make_tree',
+    lazy => 1,
+);
 
 sub make_text {
     my ($self) = @_;
@@ -35,11 +41,30 @@ sub make_tree {
 
 # This import is to support: perl -MPegex::Grammar::Module=compile
 sub import {
-    goto &Pegex::Mo::import
-        unless ((caller))[1] =~ /^-e?$/ and @_ == 2 and $_[1] eq 'compile';
-    my $package = shift;
-    $package->compile_into_module();
-    exit;
+    my ($package) = @_;
+    if (((caller))[1] =~ /^-e?$/ and @_ == 2 and $_[1] eq 'compile') {
+        $package->compile_into_module();
+        exit;
+    }
+    if (my $env = $ENV{PERL_PEGEX_AUTO_COMPILE}) {
+        my %modules = map {($_, 1)} split ',', $env;
+        if ($modules{$package}) {
+            if (my $grammar_file = $package->file) {
+                if (-f $grammar_file) {
+                    my $module = $package;
+                    $module =~ s!::!/!g;
+                    $module .= '.pm';
+                    my $module_file = $INC{$module};
+                    if (-M $grammar_file < -M $module_file) {
+                        $package->compile_into_module();
+                        local $SIG{__WARN__};
+                        delete $INC{$module};
+                        require $module;
+                    }
+                }
+            }
+        }
+    }
 }
 
 sub compile_into_module {

@@ -1,7 +1,7 @@
 #line 1
 package TestML::AST;
-use Pegex::Mo;
-extends 'Pegex::Receiver';
+use TestML::Mo;
+extends 'Pegex::Tree';
 
 use TestML::Runtime;
 

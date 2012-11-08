@@ -13,14 +13,14 @@ use strict;
 use warnings;
 
 my $requires = "
-use Pegex 0.20 ();
+use Pegex 0.21 ();
 ";
 
 package TestML;
 
 use TestML::Runtime;
 
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 
 use constant XXX_skip => 1;
 our $DumpModule = 'YAML::XS';

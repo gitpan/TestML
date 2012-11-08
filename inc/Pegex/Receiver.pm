@@ -5,24 +5,27 @@
 # author:    Ingy döt Net <ingy@cpan.org>
 # license:   perl
 # copyright: 2011, 2012
+# see:
+# Pegex::Tree
+# Pegex::Tree::Wrap
+# Pegex::Pegex::AST
 
 package Pegex::Receiver;
-use Pegex::Mo;
+use Pegex::Base;
 
-has parser => ();
-has data => ();
-has wrap => ( default => sub { 0 } );
+has parser => (); # The parser object.
 
-# Flatten a structure of nested arrays into a single array.
+# Flatten a structure of nested arrays into a single array in place.
 sub flatten {
     my ($self, $array, $times) = @_;
     $times //= -1;
-    return $array unless $times--;
-    return [
-        map {
-            (ref($_) eq 'ARRAY') ? @{$self->flatten($_, $times)} : $_
-        } @$array
-    ];
+    while ($times-- and grep {ref($_) eq 'ARRAY'} @$array) {
+        @$array = map {
+            (ref($_) eq 'ARRAY') ? @$_ : $_
+        } @$array;
+    }
+    return $array;
 }
 
 1;
+

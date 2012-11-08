@@ -13,9 +13,9 @@ inc/Module/Install/WriteAll.pm
 inc/Module/Package.pm
 inc/Pegex/Grammar.pm
 inc/Pegex/Input.pm
-inc/Pegex/Mo.pm
 inc/Pegex/Parser.pm
 inc/Pegex/Receiver.pm
+inc/Pegex/Tree.pm
 inc/TestML.pm
 inc/TestML/AST.pm
 inc/TestML/Compiler.pm

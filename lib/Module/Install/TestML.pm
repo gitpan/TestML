@@ -14,7 +14,7 @@ sub use_testml_tap {
     my $self = shift;
 
     $self->use_testml;
-     
+
     $self->include('Test::More');
     $self->include('Test::Builder');
     $self->include('Test::Builder::Module');
@@ -27,8 +27,8 @@ sub use_testml {
     $self->include('Pegex::Grammar');
     $self->include('Pegex::Input');
     $self->include('Pegex::Parser');
+    $self->include('Pegex::Tree');
     $self->include('Pegex::Receiver');
-    $self->include('Pegex::Mo');
 
     $self->include('TestML');
     $self->include('TestML::Mo');
