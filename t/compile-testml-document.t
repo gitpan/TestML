@@ -1,10 +1,10 @@
 use Test::More tests => 21;
 
-use TestML::Compiler;
+use TestML::Compiler::Pegex;
 
 my $testml = '
 # A comment
-%TestML 1.0
+%TestML 0.1.0
 
 Plan = 2;
 Title = "O HAI TEST";
@@ -20,29 +20,29 @@ Title = "O HAI TEST";
 --- output: I LOVE LUCY
 ';
 
-my $func = TestML::Compiler->new->compile($testml);
+my $func = TestML::Compiler::Pegex->new->compile($testml);
 ok $func, 'TestML string matches against TestML grammar';
-is $func->namespace->{TestML}->value, '1.0', 'Version parses';
-is $func->statements->[0]->expression->units->[0]->args->[1]->units->[0]->value, '2', 'Plan parses';
-is $func->statements->[1]->expression->units->[0]->args->[1]->units->[0]->value, 'O HAI TEST', 'Title parses';
+is $func->namespace->{TestML}->value, '0.1.0', 'Version parses';
+is $func->statements->[0]->expr->value, 2, 'Plan parses';
+is $func->statements->[1]->expr->value, 'O HAI TEST', 'Title parses';
+is $func->statements->[1]->expr->value, 'O HAI TEST', 'Title parses';
 
 is scalar(@{$func->statements}), 3, 'Three test statements';
 my $statement = $func->statements->[2];
 is join('-', @{$statement->points}), 'input-output',
     'Point list is correct';
 
-is scalar(@{$statement->expression->units}), 2, 'Expression has two units';
-my $expression = $statement->expression;
-is $expression->units->[0]->name, 'Point', 'First sub is a Point';
-is $expression->units->[0]->args->[0], 'input', 'Point name is "input"';
-is $expression->units->[1]->name, 'uppercase', 'Second sub is "uppercase"';
+is scalar(@{$statement->expr->calls}), 2, 'Expression has two calls';
+my $expr = $statement->expr;
+ok $expr->calls->[0]->isa('TestML::Point'), 'First sub is a Point';
+is $expr->calls->[0]->name, 'input', 'Point name is "input"';
+is $expr->calls->[1]->name, 'uppercase', 'Second sub is "uppercase"';
 
-is $statement->assertion->name, 'EQ', 'Assertion is "EQ"';
+is $statement->assert->name, 'EQ', 'Assertion is "EQ"';
 
-$expression = $statement->assertion->expression;
-is scalar(@{$expression->units}), 1, 'Right side has one part';
-is $expression->units->[0]->name, 'Point', 'First sub is a Point';
-is $expression->units->[0]->args->[0], 'output', 'Point name is "output"';
+$expr = $statement->assert->expr;
+ok $expr->isa('TestML::Point'), 'First sub is a Point';
+is $expr->name, 'output', 'Point name is "output"';
 
 is scalar(@{$func->data}), 2, 'Two data blocks';
 my ($block1, $block2) = @{$func->data};

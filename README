@@ -3,13 +3,13 @@ NAME
 
 SYNOPSIS
         # file t/testml/encode.tml
-        %TestML 1.0
+        %TestML 0.1.0
 
-        Title = 'Tests for AcmeEncode';
-        Plan = 3;
+        Title = 'Tests for AcmeEncode'
+        Plan = 3
 
-        *text.apply_rot13 == *rot13;
-        *text.apply_md5   == *md5;
+        *text.apply_rot13 == *rot13
+        *text.apply_md5   == *md5
 
         === Encode some poetry
         --- text
@@ -32,21 +32,16 @@ SYNOPSIS
 
     To run this test you would have a normal test file that looks like this:
 
-        use TestML::Runtime::TAP;
+        use TestML;
+        use t::Bridge;
 
-        TestML::Runtime::TAP->new(
+        TestML->new(
             testml => 'testml/encode.tml',
             bridge => 't::Bridge',
-        )->run();
+        )->run;
 
-    or more simply:
-
-        use TestML -run,
-            -testml => 'testml/encode.tml',
-            -bridge => 't::Bridge';
-
-    The apply_* transform functions are defined in the bridge class that is
-    specified outside this test (t/Bridge.pm).
+    The apply_* functions are defined in the bridge class that is specified
+    outside this test (t/Bridge.pm).
 
 DESCRIPTION
     TestML is a generic, programming language agnostic, meta language for
@@ -58,8 +53,8 @@ DESCRIPTION
     In a nutshell you write a bunch of data tests that have inputs and
     expected results. Using a simple syntax, you specify what functions the
     data must pass through to produce the expected results. You use a bridge
-    class to write the data transform functions that pass the data through
-    your application.
+    class to write the data functions that pass the data through your
+    application.
 
     In Perl 5, TestML is the evolution of the Test::Base module. It has a
     superset of Test:Base's goals. The data markup syntax is currently
@@ -74,7 +69,7 @@ AUTHOR
     Ingy döt Net <ingy@cpan.org>
 
 COPYRIGHT AND LICENSE
-    Copyright (c) 2009, 2010, 2011, 2012. Ingy döt Net.
+    Copyright (c) 2009-2014. Ingy döt Net.
 
     This program is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.

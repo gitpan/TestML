@@ -1,3 +1,4 @@
+# XXX This module should be deprecated or at least moved to a separate dist.
 package Module::Install::TestML;
 use strict;
 use warnings;
@@ -6,12 +7,11 @@ use Module::Install::Base;
 
 use vars qw($VERSION @ISA);
 BEGIN {
-    $VERSION = '0.26';
     @ISA     = 'Module::Install::Base';
 }
 
 sub use_testml_tap {
-    my $self = shift;
+    my ($self) = @_;
 
     $self->use_testml;
 
@@ -22,36 +22,37 @@ sub use_testml_tap {
 }
 
 sub use_testml {
-    my $self = shift;
+    my ($self) = @_;
 
     $self->include('Pegex::Grammar');
+    $self->include('Pegex::Base');
     $self->include('Pegex::Input');
     $self->include('Pegex::Parser');
     $self->include('Pegex::Tree');
     $self->include('Pegex::Receiver');
 
     $self->include('TestML');
-    $self->include('TestML::Mo');
-    $self->include('TestML::AST');
+    $self->include('TestML::Base');
+    $self->include('TestML::Bridge');
     $self->include('TestML::Compiler');
-    $self->include('TestML::Grammar');
+    $self->include('TestML::Compiler::Pegex');
+    $self->include('TestML::Compiler::Pegex::AST');
+    $self->include('TestML::Compiler::Pegex::Grammar');
     $self->include('TestML::Library::Debug');
     $self->include('TestML::Library::Standard');
     $self->include('TestML::Runtime');
     $self->include('TestML::Runtime::TAP');
+    $self->include('TestML::Util');
 }
 
 sub testml_setup {
-    my $self = shift;
+    my ($self, $config) = @_;
     return unless $self->is_admin;
-    my $config = shift;
     die "setup_config requires a yaml file argument"
         unless $config;
-    die "'$config' is not an existing file"
-        unless -f $config;
     print "testml_setup\n";
     require TestML::Setup;
-    TestML::Setup::testml_setup($config);
+    TestML::Setup->new->setup($config);
 }
 
 1;
@@ -93,7 +94,7 @@ Ingy döt Net <ingy@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2009, 2010. Ingy döt Net.
+Copyright (c) 2009-2014. Ingy döt Net.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.

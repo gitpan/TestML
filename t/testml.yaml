@@ -1,11 +1,20 @@
-testml: ../../testml-tml
-local: testml
-lang: pm5
-bridge: t::Bridge
-skip:
-- comments
-- data
-- external1
-- external2
-- syntax
-- topic
+source_testml_dir: ../../testml-tml
+local_testml_dir: ./testml
+test_file_template: |
+  use lib 't';
+  use TestML;
+  use TestMLBridge;
+
+  TestML->new(
+      testml => '[% file %]',
+      bridge => 'TestMLBridge',
+  )->run;
+test_file_prefix: testml-
+exclude_testml_files:
+- comments.tml
+- data.tml
+- external1.tml
+- external2.tml
+- syntax.tml
+- syntax2.tml
+- topic.tml

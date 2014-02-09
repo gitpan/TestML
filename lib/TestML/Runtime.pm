@@ -1,222 +1,200 @@
 package TestML::Runtime;
-use TestML::Mo;
+use TestML::Base;
 
-use TestML::Compiler;
+has testml => ();
+has bridge => ();
+has library => ();
+has compiler => ();
+has skip => ();
 
-# Since there is only ever one test runtime, it makes things a LOT cleaner to
-# keep the reference to it in a global variable accessed by a method, than to
-# put a reference to it into every object that needs to access it.
-our $self;
-
-has base => default => sub {$0 =~ m!(.*)/! ? $1 : "."};   # Base directory
-has testml => ();       # TestML document filename, handle or text
-has bridge => ();       # Bridge transform module
-
-# XXX Add TestML.pm support for -library keyword.
-has library => default => sub {[]};    # Transform library modules
-
-has function => ();         # Current function executing
-has planned => default => sub {0};     # plan() has been called
-has test_number => default => sub {0}; # Number of tests run so far
+has function => ();
+has error => ();
+has global => ();
+has base => ();
 
 sub BUILD {
-    my $self = $TestML::Runtime::self = shift;
-    $self->function($self->compile_testml);
-    $self->load_variables;
-    $self->load_transform_module('TestML::Library::Standard');
-    $self->load_transform_module('TestML::Library::Debug');
-    if ($self->bridge) {
-        $self->load_transform_module($self->bridge);
-    }
+    my ($self) = @_;
+    $TestML::Runtime::Singleton = $self;
+    $self->{base} ||= $0 =~ m!(.*)/! ? $1 : ".";
 }
-
-# XXX Move to TestML::Adapter
-sub title { }
-sub plan_begin { }
-sub plan_end { }
 
 sub run {
-    my $self = shift;
-
-    my $function = $self->function;
-    my $context = TestML::None->new;
-    my $args = [];
-
-    $self->run_function($self->function, $context, $args);
-
-    $self->run_plan();
-    $self->plan_end();
+    my ($self) = @_;
+    $self->compile_testml;
+    $self->initialize_runtime;
+    $self->run_function($self->{function}, []);
 }
 
-# XXX - TestML exception handling needs to happen at the function level, not
-# just at the expression level. Not yet handled here.
+# TODO Functions should have return values
 sub run_function {
-    my $self = shift;
-    my $function = shift;
-    my $context = shift;
-    my $args = shift;
+    my ($self, $function, $args) = @_;
 
+    $self->apply_signature($function, $args);
+
+    my $parent = $self->function;
+    $self->{function} = $function;
+
+    for my $statement (@{$function->statements}) {
+        if (ref($statement) eq 'TestML::Assignment') {
+            $self->run_assignment($statement);
+        }
+        else {
+            $self->run_statement($statement);
+        }
+    }
+    $self->{function} = $parent;
+    return;
+}
+
+sub apply_signature {
+    my ($self, $function, $args) = @_;
     my $signature = $function->signature;
+
     die sprintf(
         "Function received %d args but expected %d",
         scalar(@$args),
         scalar(@$signature),
     ) if @$signature and @$args != @$signature;
-    $function->setvar('Self', $context);
+
+    $function->setvar('Self', $function);
     for (my $i = 0; $i < @$signature; $i++) {
         my $arg = $args->[$i];
         $arg = $self->run_expression($arg)
             if ref($arg) eq 'TestML::Expression';
         $function->setvar($signature->[$i], $arg);
     }
-
-    my $parent = $self->function;
-    $self->function($function);
-
-    for my $statement (@{$function->statements}) {
-        $self->run_statement($statement);
-    }
-
-    $self->function($parent);
-
-    return TestML::None->new;
 }
 
 sub run_statement {
-    my $self = shift;
-    my $statement = shift;
-    my $blocks = @{$statement->points}
-        ? $self->select_blocks($statement->points)
-        : [1];
+    my ($self, $statement) = @_;
+    my $blocks = $self->select_blocks($statement->points || []);
     for my $block (@$blocks) {
-        $self->function->setvar('Block', $block) if ref($block);
-        my $context = $self->run_expression($statement->expression);
-        if (my $assertion = $statement->assertion) {
-            $self->run_assertion($context, $assertion);
+        $self->function->setvar('Block', $block) if $block != 1;
+        my $result = $self->run_expression($statement->expr);
+        if (my $assert = $statement->assert) {
+            $self->run_assertion($result, $assert);
         }
     }
 }
 
-sub run_assertion {
-    my $self = shift;
-    my $left = shift;
-    my $assertion = shift;
-    my $method = 'assert_' . $assertion->name;
-
-    # Run this as late as possible.
-    $self->run_plan;
-
-    $self->test_number($self->test_number + 1);
+sub run_assignment {
+    my ($self, $assignment) = @_;
     $self->function->setvar(
-        TestNumber => TestML::Num->new(value => $self->test_number),
+        $assignment->name,
+        $self->run_expression($assignment->expr),
     );
+}
 
-    # TODO - Should check 
-    my $results = ($left->type eq 'List')
-        ? $left->value
-        : [ $left ];
-    for my $result (@$results) {
-        if (@{$assertion->expression->units}) {
-            my $right = $self->run_expression($assertion->expression);
-            my $matches = ($right->type eq 'List')
-                ? $right->value
-                : [ $right ];
-            for my $match (@$matches) {
-                $self->$method($result, $match);
-            }
-        }
-        else {
-            $self->$method($result);
-        }
+sub run_assertion {
+    my ($self, $left, $assert) = @_;
+    my $method = 'assert_' . $assert->name;
+
+    $self->function->getvar('TestNumber')->{value}++;
+
+    if ($assert->expr) {
+        $self->$method($left, $self->run_expression($assert->expr));
+    }
+    else {
+        $self->$method($left);
     }
 }
 
 sub run_expression {
-    my $self = shift;
-    my $prev_expression = $self->function->expression;
-    my $expression = shift;
-    $self->function->expression($expression);
+    my ($self, $expr) = @_;
 
-    my $units = $expression->units;
-    my $context = TestML::None->new;
-
-    for (my $i = 0; $i < @$units; $i++) {
-        my $unit = $units->[$i];
-        if ($expression->error) {
-            next unless
-                $unit->isa('TestML::Transform') and
-                $unit->name eq 'Catch';
-        }
-        if ($unit->isa('TestML::Object')) {
-            $context = $unit;
-            next;
-        }
-        if ($unit->isa('TestML::Function')) {
-            $context = $unit;
-            next;
-        }
-        die "Unexpected unit: $unit" unless $unit->isa('TestML::Transform');
-        my $callable = $self->function->getvar($unit->name)
-            or die "Can't find transform '${\$unit->name}'";
-        my $args = $unit->args;
-        if ($callable->isa('TestML::Native')) {
-            $context = $self->run_native($callable->value, $context, $args);
-        }
-        elsif ($callable->isa('TestML::Object')) {
-            $context = $callable;
-        }
-        elsif ($callable->isa('TestML::Function')) {
-            if ($i or $unit->explicit_call) {
-                my $points = $self->function->getvar('Block')->points;
-                for my $key (keys %$points) {
-                    $callable->setvar($key, TestML::Str->new(value => $points->{$key}));
-                }
-                $context = $self->run_function($callable, $context, $args);
+    my $context = undef;
+    $self->{error} = undef;
+    if ($expr->isa('TestML::Expression')) {
+        my @calls = @{$expr->calls};
+        die if @calls <= 1;
+        $context = $self->run_call(shift(@calls));
+        for my $call (@calls) {
+            if ($self->error) {
+                next unless
+                    $call->isa('TestML::Call') and
+                    $call->name eq 'Catch';
             }
-            $context = $callable;
-        }
-        else {
-            ZZZ $expression, $unit, $callable;
+            $context = $self->run_call($call, $context);
         }
     }
-    if ($expression->error) {
-        die $expression->error;
+    else {
+        $context = $self->run_call($expr);
     }
-    $self->function->expression($prev_expression);
+    if ($self->error) {
+        die $self->error;
+    }
     return $context;
 }
 
-sub run_native {
-    my $self = shift;
-    my $function = shift;
-    my $context = shift;
-    my $args = shift;
-    my $value = eval {
-        &$function(
-            $context,
-            map {
-                (ref($_) eq 'TestML::Expression')
-                ? $self->run_expression($_)
-                : $_
-            } @$args
-        );
-    };
-    if ($@) {
-        $self->function->expression->error($@);
-        $context = TestML::Error->new(value => $@);
+sub run_call {
+    my ($self, $call, $context) = @_;
+
+    if ($call->isa('TestML::Object')) {
+        return $call;
     }
-    elsif (UNIVERSAL::isa($value, 'TestML::Object')) {
-        $context = $value;
+    if ($call->isa('TestML::Function')) {
+        return $call;
     }
-    else {
-        $context = $self->object_from_native($value);
+    if ($call->isa('TestML::Point')) {
+        return $self->get_point($call->name);
     }
-    return $context;
+    if ($call->isa('TestML::Call')) {
+        my $name = $call->name;
+        my $callable =
+            $self->function->getvar($name) ||
+            $self->lookup_callable($name) ||
+                die "Can't locate '$name' callable";
+        if ($callable->isa('TestML::Object')) {
+            return $callable;
+        }
+        return $callable unless $call->args or defined $context;
+        $call->{args} ||= [];
+        my $args = [map $self->run_expression($_), @{$call->args}];
+        unshift @$args, $context if $context;
+        if ($callable->isa('TestML::Callable')) {
+            my $value = eval { $callable->value->(@$args) };
+            if ($@) {
+                $self->{error} = $@;
+                return TestML::Error->new(value => $@);
+            }
+            die "'$name' did not return a TestML::Object object"
+                unless UNIVERSAL::isa($value, 'TestML::Object');
+            return $value;
+        }
+        if ($callable->isa('TestML::Function')) {
+            return $self->run_function($callable, $args);
+        }
+        die;
+    }
+    die;
+}
+
+sub lookup_callable {
+    my ($self, $name) = @_;
+    for my $library (@{$self->function->getvar('Library')->value}) {
+        if ($library->can($name)) {
+            my $function = sub { $library->$name(@_) };
+            my $callable = TestML::Callable->new(value => $function);
+            $self->function->setvar($name, $callable);
+            return $callable;
+        }
+    }
+    return;
+}
+
+sub get_point {
+    my ($self, $name) = @_;
+    my $value = $self->function->getvar('Block')->{points}{$name};
+    defined $value or return;
+    if ($value =~ s/\n+\z/\n/ and $value eq "\n") {
+        $value = '';
+    }
+    return TestML::Str->new(value => $value);
 }
 
 sub select_blocks {
-    my $self = shift;
-    my $wanted = shift;
+    my ($self, $wanted) = @_;
+    return [1] unless @$wanted;
     my $selected = [];
 
     OUTER: for my $block (@{$self->function->data}) {
@@ -226,7 +204,7 @@ sub select_blocks {
             next OUTER unless exists $points{$point};
         }
         if (exists $points{ONLY}) {
-            @$selected = ($block);
+            $selected = [$block];
             last;
         }
         push @$selected, $block;
@@ -235,218 +213,187 @@ sub select_blocks {
     return $selected;
 }
 
-sub object_from_native {
-    my $self = shift;
-    my $value = shift;
-    return
-        not(defined $value) ? TestML::None->new :
-        ref($value) eq 'ARRAY' ? TestML::List->new(value => $value) :
-        $value =~ /^-?\d+$/ ? TestML::Num->new(value => $value + 0) :
-        "$value" eq "$TestML::Constant::True" ? $value :
-        "$value" eq "$TestML::Constant::False" ? $value :
-        "$value" eq "$TestML::Constant::None" ? $value :
-        TestML::Str->new(value => $value);
-}
-
 sub compile_testml {
-    my $self = shift;
-    my $path = ref($self->testml)
-        ? $self->testml
-        : join '/', $self->base, $self->testml;
-    my $function = TestML::Compiler->new(base => $self->base)->compile($path)
-        or die "TestML document failed to compile";
-    return $function;
-}
+    my ($self) = @_;
 
-sub load_variables {
-    my $self = shift;
-    my $global = $self->function->outer;
-    $global->setvar(Block => TestML::Block->new);
-    $global->setvar(Label => TestML::Str->new(value => '$BlockLabel'));
-    $global->setvar(True => $TestML::Constant::True);
-    $global->setvar(False => $TestML::Constant::False);
-    $global->setvar(None => $TestML::Constant::None);
-}
-
-sub load_transform_module {
-    my $self = shift;
-    my $module_name = shift;
-    if ($module_name ne 'main') {
-        eval "require $module_name; 1"
-            or die "Can't use $module_name:\n$@";
+    die "'testml' document required but not found"
+        unless $self->testml;
+    if ($self->testml !~ /\n/) {
+        $self->testml =~ /(?:(.*)\/)?(.*)/ or die;
+        $self->{testml} = $2;
+        $self->{base} .= '/' . $1 if $1;
+        $self->{testml} = $self->read_testml_file($self->testml);
     }
+    $self->{function} = $self->compiler->new->compile($self->testml)
+        or die "TestML document failed to compile";
+}
 
-    my $global = $self->function->outer;
-    no strict 'refs';
-    for my $key (sort keys %{"$module_name\::"}) {
-        next if $key eq "\x16";
-        my $glob = ${"$module_name\::"}{$key};
-        if (my $function = *$glob{CODE}) {
-            $global->setvar(
-                $key => TestML::Native->new(value => $function),
-            );
+sub initialize_runtime {
+    my ($self) = @_;
+
+    $self->{global} = $self->function->outer;
+
+    $self->{global}->setvar(Block => TestML::Block->new);
+    $self->{global}->setvar(Label => TestML::Str->new(value => '$BlockLabel'));
+    $self->{global}->setvar(True => $TestML::Constant::True);
+    $self->{global}->setvar(False => $TestML::Constant::False);
+    $self->{global}->setvar(None => $TestML::Constant::None);
+    $self->{global}->setvar(TestNumber => TestML::Num->new(value => 0));
+    $self->{global}->setvar(Library => TestML::List->new);
+
+    my $library = $self->function->getvar('Library');
+    for my $lib ($self->bridge, $self->library) {
+        if (ref($lib) eq 'ARRAY') {
+            $library->push($_->new) for @$lib;
         }
-        elsif (my $object = *$glob{SCALAR}) {
-            if (ref($$object)) {
-                $global->setvar($key => $$object);
-            }
+        else {
+            $library->push($lib->new);
         }
     }
 }
 
 sub get_label {
-    my $self = shift;
-    my $label = $self->function->getvar('Label')->value;
-    sub label {
-        my $self = shift;
-        my $var = shift;
-        my $block = $self->function->getvar('Block');
-        return $block->label if $var eq 'BlockLabel';
-        if (my $v = $block->points->{$var}) {
-            $v =~ s/\n.*//s;
-            $v =~ s/^\s*(.*?)\s*$/$1/;
-            return $v;
-        }
-        if (my $v = $self->function->getvar($var)) {
-            return $v->value;
-        }
-    }
-    $label =~ s/\$(\w+)/label($self, $1)/ge;
-    return $label ? ($label) : ();
+    my ($self) = @_;
+    my $label = $self->function->getvar('Label') or return;
+    $label = $label->value or return;
+    $label =~ s/\$(\w+)/$self->replace_label($1)/ge;
+    return $label;
 }
 
-sub run_plan {
-    my $self = shift;
-    if (! $self->planned) {
-        $self->title();
-        $self->plan_begin();
-        $self->planned(1);
+sub replace_label {
+    my ($self, $var) = @_;
+    my $block = $self->function->getvar('Block');
+    return $block->label if $var eq 'BlockLabel';
+    if (my $v = $block->points->{$var}) {
+        $v =~ s/\n.*//s;
+        $v =~ s/^\s*(.*?)\s*$/$1/;
+        return $v;
+    }
+    if (my $v = $self->function->getvar($var)) {
+        return $v->value;
     }
 }
 
-sub get_error {
-    my $self = shift;
-    return $self->function->expression->error;
-}
-
-sub clear_error {
-    my $self = shift;
-    return $self->function->expression->error(undef);
-}
-
-sub throw {
-    require Carp;
-    Carp::croak $_[1];
+sub read_testml_file {
+    my ($self, $file) = @_;
+    my $path = $self->base . '/' . $file;
+    open my $fh, $path
+        or die "Can't open '$path' for input: $!";
+    local $/;
+    return <$fh>;
 }
 
 #-----------------------------------------------------------------------------
 package TestML::Function;
-use TestML::Mo;
+use TestML::Base;
 
-has type => default => sub {'Func'};        # Functions are TestML typed objects
-# XXX Make this a featherweight reference.
-has signature => default => sub {[]};       # Input variable names
-has namespace => default => sub {{}};       # Lexical scoped variable stash
-has statements => default => sub {[]};      # Exexcutable code statements
-has data => default => sub{[]};             # Data section scoped to this function
-
-# Runtime pointers to current objects.
-has expression => ();
-has block => ();
+has type => 'Func';     # Functions are TestML typed objects
+has signature => [];    # Input variable names
+has namespace => {};    # Lexical scoped variable stash
+has statements => [];   # Exexcutable code statements
+has data => [];         # Data section scoped to this function
 
 my $outer = {};
 sub outer { @_ == 1 ? $outer->{$_[0]} : ($outer->{$_[0]} = $_[1]) }
 
 sub getvar {
-    my $self = shift;
-    my $name = shift;
+    my ($self, $name) = @_;
     while ($self) {
         if (my $object = $self->namespace->{$name}) {
             return $object;
         }
         $self = $self->outer;
     }
-    return;
+    undef;
 }
 
 sub setvar {
-    my $self = shift;
-    my $name = shift;
-    my $object = shift;
-    $self->namespace->{$name} = $object;
-    return;
+    my ($self, $name, $value) = @_;
+    $self->namespace->{$name} = $value;
 }
 
 sub forgetvar {
-    my $self = shift;
-    my $name = shift;
+    my ($self, $name) = @_;
     delete $self->namespace->{$name};
-    return;
 }
 
 #-----------------------------------------------------------------------------
-package TestML::Statement;
-use TestML::Mo;
+package TestML::Assignment;
+use TestML::Base;
 
-has expression => default => sub {TestML::Expression->new};
-has assertion => ();
-has points => default => sub {[]};
+has name => ();
+has expr => ();
+
+#-----------------------------------------------------------------------------
+package TestML::Statement;
+use TestML::Base;
+
+has expr => ();
+has assert => ();
+has points => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Expression;
-use TestML::Mo;
+use TestML::Base;
 
-has units => default => sub {[]};
-has error => ();
+has calls => [];
 
 #-----------------------------------------------------------------------------
 package TestML::Assertion;
-use TestML::Mo;
+use TestML::Base;
 
 has name => ();
-has expression => default => sub {TestML::Expression->new};
+has expr => ();
 
 #-----------------------------------------------------------------------------
-package TestML::Transform;
-use TestML::Mo;
+package TestML::Call;
+use TestML::Base;
 
 has name => ();
-has args => default => sub {[]};
-has explicit_call => default => 0;
+has args => ();
+
+#-----------------------------------------------------------------------------
+package TestML::Callable;
+use TestML::Base;
+has value => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Block;
-use TestML::Mo;
+use TestML::Base;
 
-has label => default => sub {''};
-has points => default => sub {{}};
+has label => '';
+has points => {};
+
+#-----------------------------------------------------------------------------
+package TestML::Point;
+use TestML::Base;
+
+has name => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Object;
-use TestML::Mo;
+use TestML::Base;
 
 has value => ();
 
 sub type {
-    my $type = ref(shift);
+    my $type = ref($_[0]);
     $type =~ s/^TestML::// or die "Can't find type of '$type'";
     return $type;
 }
 
-sub runtime { return $TestML::Runtime::self }
-
-sub str { my $t = $_[0]->type; die "Cast from $t to Str is not supported" }
-sub num { my $t = $_[0]->type; die "Cast from $t to Num is not supported" }
-sub bool { my $t = $_[0]->type; die "Cast from $t to Bool is not supported" }
-sub list { my $t = $_[0]->type; die "Cast from $t to List is not supported" }
+sub str { die "Cast from ${\ $_[0]->type} to Str is not supported" }
+sub num { die "Cast from ${\ $_[0]->type} to Num is not supported" }
+sub bool { die "Cast from ${\ $_[0]->type} to Bool is not supported" }
+sub list { die "Cast from ${\ $_[0]->type} to List is not supported" }
 sub none { $TestML::Constant::None }
 
 #-----------------------------------------------------------------------------
 package TestML::Str;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Object';
 
-sub str { shift }
+sub str { $_[0] }
 sub num { TestML::Num->new(
     value => ($_[0]->value =~ /^-?\d+(?:\.\d+)$/ ? ($_[0]->value + 0) : 0),
 )}
@@ -457,11 +404,11 @@ sub list { TestML::List->new(value => [split //, $_[0]->value]) }
 
 #-----------------------------------------------------------------------------
 package TestML::Num;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Object';
 
 sub str { TestML::Str->new(value => $_[0]->value . "") }
-sub num { shift }
+sub num { $_[0] }
 sub bool { ($_[0]->value != 0) ? $TestML::Constant::True : $TestML::Constant::False }
 sub list {
     my $list = [];
@@ -471,42 +418,49 @@ sub list {
 
 #-----------------------------------------------------------------------------
 package TestML::Bool;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Object';
 
 sub str { TestML::Str->new(value => $_[0]->value ? "1" : "") }
 sub num { TestML::Num->new(value => $_[0]->value ? 1 : 0) }
-sub bool { shift }
+sub bool { $_[0] }
 
 #-----------------------------------------------------------------------------
 package TestML::List;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Object';
-sub list { shift }
+has value => [];
+sub list { $_[0] }
+sub push {
+    my ($self, $elem) = @_;
+    push @{$self->value}, $elem;
+}
 
 #-----------------------------------------------------------------------------
 package TestML::None;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Object';
 
-sub str { Str('') }
-sub num { Num(0) }
+sub str { TestML::Str->new(value => '') }
+sub num { TestML::Num->new(value => 0) }
 sub bool { $TestML::Constant::False }
-sub list { List([]) }
-
-#-----------------------------------------------------------------------------
-package TestML::Error;
-use TestML::Mo;
-extends 'TestML::Object';
+sub list { TestML::List->new(value => []) }
 
 #-----------------------------------------------------------------------------
 package TestML::Native;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Object';
 
+#-----------------------------------------------------------------------------
+package TestML::Error;
+use TestML::Base;
+extends 'TestML::Object';
+
+#-----------------------------------------------------------------------------
 package TestML::Constant;
 
 our $True = TestML::Bool->new(value => 1);
 our $False = TestML::Bool->new(value => 0);
 our $None = TestML::None->new;
 
+1;

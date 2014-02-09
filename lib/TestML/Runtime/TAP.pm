@@ -1,75 +1,94 @@
+use Test::Builder;
+use TestML::Runtime;
+
 package TestML::Runtime::TAP;
-use TestML::Mo;
+use TestML::Base;
 extends 'TestML::Runtime';
 
-use Test::Builder;
+has tap_object => sub { Test::Builder->new };
+has planned => 0;
 
-if ($TestML::Test::Differences) {
-    no warnings 'redefine';
-    require Test::Differences;
-    *Test::Builder::is_eq = sub {
-        my $self = shift;
-        \&Test::Differences::eq_or_diff(@_);
-    };
+sub run {
+    my ($self) = @_;
+    $self->SUPER::run;
+    $self->check_plan;
+    $self->plan_end;
 }
 
-has test_builder => default => sub { Test::Builder->new };
+sub run_assertion {
+    my ($self, @args) = @_;
+    $self->check_plan;
+    $self->SUPER::run_assertion(@args);
+}
+
+sub check_plan {
+    my ($self) = @_;
+    if (! $self->planned) {
+        $self->title;
+        $self->plan_begin;
+        $self->{planned} = 1;
+    }
+}
 
 sub title {
-    my $self = shift;
+    my ($self) = @_;
     if (my $title = $self->function->getvar('Title')) {
         $title = $title->value;
         $title = "=== $title ===\n";
-        if ($self->test_builder->can('note')) {
-            $self->test_builder->note($title);
-        }
-        else {
-            $self->test_builder->diag($title);
-        }
+        $self->tap_object->note($title);
     }
+}
+
+sub skip_test {
+    my ($self, $reason) = @_;
+    $self->tap_object->plan(skip_all => $reason);
 }
 
 sub plan_begin {
-    my $self = shift;
-    if (defined (my $tests = $self->function->getvar('Plan'))) {
-        $self->test_builder->plan(tests => $tests->value);
-    }
-    else {
-        $self->test_builder->no_plan();
+    my ($self) = @_;
+    if (my $tests = $self->function->getvar('Plan')) {
+        $self->tap_object->plan(tests => $tests->value);
     }
 }
 
+sub plan_end {
+    my ($self) = @_;
+    $self->tap_object->done_testing();
+}
+
+# TODO Use Test::Diff here.
 sub assert_EQ {
-    my $self = shift;
-    $self->test_builder->is_eq(
-        shift->str->value,
-        shift->str->value,
+    my ($self, $got, $want) = @_;
+    $self->tap_object->is_eq(
+        $got->str->value,
+        $want->str->value,
         $self->get_label,
     );
 }
 
 sub assert_HAS {
-    my $self = shift;
-    my $text = shift->value;
-    my $part = shift->value;
-    my $assertion = (index($text, $part) >= 0);
+    my ($self, $got, $has) = @_;
+    $got = $got->str->value;
+    $has = $has->str->value;
+    my $assertion = (index($got, $has) >= 0);
     if (not $assertion) {
         my $msg = <<"...";
 Failed TestML HAS (~~) assertion. This text:
-'$text'
+'$got'
 does not contain this string:
-'$part'
+'$has'
 ...
-        $self->test_builder->diag($msg);
+        $self->tap_object->diag($msg);
     }
-    $self->test_builder->ok($assertion, $self->get_label);
+    $self->tap_object->ok($assertion, $self->get_label);
 }
 
 sub assert_OK {
-    my $self = shift;
-    my $context = shift;
-    $self->test_builder->ok(
-        $context->bool->value,
+    my ($self, $got) = @_;
+    $self->tap_object->ok(
+        $got->bool->value,
         $self->get_label,
     );
 }
+
+1;

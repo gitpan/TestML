@@ -1,62 +1,38 @@
+use TestML::Runtime;
+
 package TestML::Compiler;
+use TestML::Base;
 
-use TestML::Mo;
-use TestML::Grammar;
-use TestML::AST;
-use Pegex::Parser;
-
-has base => ();
+has code => ();
+has data => ();
+has text => ();
+has directives => ();
+has function => ();
 
 sub compile {
-    my $self = shift;
-    my $file = shift;
-    if (not ref $file and $file !~ /\n/) {
-        $file =~ s/(.*)\/(.*)/$2/ or die;
-        $self->base($1);
-    }
-    my $input = (not ref($file) and $file =~ /\n/)
-        ? $file
-        : $self->slurp($file);
+    my ($self, $input) = @_;
 
-    my $result = $self->preprocess($input, 'top');
+    $self->preprocess($input, 'top');
+    $self->compile_code;
+    $self->compile_data;
 
-    my ($code, $data) = @$result{qw(code data)};
-
-    my $parser = Pegex::Parser->new(
-        grammar => TestML::Grammar->new,
-        receiver => TestML::AST->new,
-    );
-
-    $parser->parse($code, 'code_section')
-        or die "Parse TestML code section failed";
-
-    $parser = $self->fixup_grammar($parser, $result);
-
-    if (length $data) {
-        $parser->parse($data, 'data_section')
-            or die "Parse TestML data section failed";
+    if ($self->directives->{DumpAST}) {
+        XXX($self->function);
     }
 
-    if ($result->{DumpAST}) {
-        XXX($parser->receiver->function);
-    }
+    $self->function->namespace->{TestML} = $self->directives->{TestML};
 
-    my $function = $parser->receiver->function;
-    $function->outer(TestML::Function->new());
-
-    return $function;
+    $self->function->outer(TestML::Function->new);
+    return $self->function;
 }
 
 sub preprocess {
-    my $self = shift;
-    my $text = shift;
-    my $top = shift;
+    my ($self, $input, $top) = @_;
 
-    my @parts = split /^((?:\%\w+.*|\#.*|\ *)\n)/m, $text;
+    my @parts = split /^((?:\%\w+.*|\#.*|\ *)\n)/m, $input;
+    $input = '';
 
-    $text = '';
-
-    my $result = {
+    $self->{directives} = {
         TestML => '',
         DataMarker => '',
         BlockMarker => '===',
@@ -67,121 +43,78 @@ sub preprocess {
     for my $part (@parts) {
         next unless length($part);
         if ($part =~ /^(\#.*|\ *)\n/) {
-            $text .= "\n";
+            $input .= "\n";
             next;
         }
         if ($part =~ /^%(\w+)\s*(.*?)\s*\n/) {
             my ($directive, $value) = ($1, $2);
-            $text .= "\n";
+            $input .= "\n";
             if ($directive eq 'TestML') {
                 die "Invalid TestML directive"
-                    unless $value =~ /^\d+\.\d+$/;
+                    unless $value =~ /^\d+\.\d+\.\d+$/;
                 die "More than one TestML directive found"
-                    if $result->{TestML};
-                $result->{TestML} = TestML::Str->new(value => $value);
+                    if $self->directives->{TestML};
+                $self->directives->{TestML} =
+                    TestML::Str->new(value => $value);
                 next;
             }
-            $order_error = 1 unless $result->{TestML};
+            $order_error = 1 unless $self->directives->{TestML};
             if ($directive eq 'Include') {
-                my $sub_result = $self->preprocess($self->slurp($value));
-                $text .= $sub_result->{text};
-                $result->{DataMarker} = $sub_result->{DataMarker};
-                $result->{BlockMarker} = $sub_result->{BlockMarker};
-                $result->{PointMarker} = $sub_result->{PointMarker};
+                my $runtime = $TestML::Runtime::Singleton
+                    or die "Can't process Include. No runtime available";
+                my $include = ref($self)->new;
+                $include->preprocess($runtime->read_testml_file($value));
+                $input .= $include->text;
+                $self->directives->{DataMarker} =
+                    $include->directives->{DataMarker};
+                $self->directives->{BlockMarker} =
+                    $include->directives->{BlockMarker};
+                $self->directives->{PointMarker} =
+                    $include->directives->{PointMarker};
                 die "Can't define %TestML in an Included file"
-                    if $sub_result->{TestML};
+                    if $include->directives->{TestML};
             }
             elsif ($directive =~ /^(DataMarker|BlockMarker|PointMarker)$/) {
-                $result->{$directive} = $value;
+                $self->directives->{$directive} = $value;
             }
             elsif ($directive =~ /^(DebugPegex|DumpAST)$/) {
                 $value = 1 unless length($value);
-                $result->{$directive} = $value;
+                $self->directives->{$directive} = $value;
             }
             else {
                 die "Unknown TestML directive '$directive'";
             }
         }
         else {
-            $order_error = 1 if $text and not $result->{TestML};
-            $text .= $part;
+            $order_error = 1 if $input and not $self->directives->{TestML};
+            $input .= $part;
         }
     }
 
     if ($top) {
         die "No TestML directive found"
-            unless $result->{TestML};
+            unless $self->directives->{TestML};
         die "%TestML directive must be the first (non-comment) statement"
             if $order_error;
 
-        my $DataMarker = $result->{DataMarker} ||= $result->{BlockMarker};
-        my ($code, $data);
-        if ((my $split = index($text, "\n$DataMarker")) >= 0) {
-            $result->{code} = substr($text, 0, $split + 1);
-            $result->{data} = substr($text, $split + 1);
+        my $DataMarker =
+            $self->directives->{DataMarker} ||=
+            $self->directives->{BlockMarker};
+        if ((my $split = index($input, "\n$DataMarker")) >= 0) {
+            $self->{code} = substr($input, 0, $split + 1);
+            $self->{data} = substr($input, $split + 1);
         }
         else {
-            $result->{code} = $text;
-            $result->{data} = '';
+            $self->{code} = $input;
+            $self->{data} = '';
         }
 
-        $result->{code} =~ s/^\\(\\*[\%\#])/$1/gm;
-        $result->{data} =~ s/^\\(\\*[\%\#])/$1/gm;
+        $self->{code} =~ s/^\\(\\*[\%\#])/$1/gm;
+        $self->{data} =~ s/^\\(\\*[\%\#])/$1/gm;
     }
     else {
-        $result->{text} = $text;
+        $self->{text} = $input;
     }
-
-    return $result;
-}
-
-sub fixup_grammar {
-    my ($self, $parser, $hash) = @_;
-
-    my $namespace = $parser->receiver->function->namespace;
-    $namespace->{TestML} = $hash->{TestML};
-
-    my $tree = $parser->grammar->tree;
-
-    my $point_lines = $tree->{point_lines}{'.rgx'};
-
-    my $block_marker = $hash->{BlockMarker};
-    if ($block_marker) {
-        $block_marker =~ s/([\$\%\^\*\+\?\|])/\\$1/g;
-        $tree->{block_marker}{'.rgx'} = qr/\G$block_marker/;
-        $point_lines =~ s/===/$block_marker/;
-    }
-
-    my $point_marker = $hash->{PointMarker};
-    if ($point_marker) {
-        $point_marker =~ s/([\$\%\^\*\+\?\|])/\\$1/g;
-        $tree->{point_marker}{'.rgx'} = qr/\G$point_marker/;
-        $point_lines =~ s/\\-\\-\\-/$point_marker/;
-    }
-
-    $tree->{point_lines}{'.rgx'} = qr/$point_lines/;
-
-    Pegex::Parser->new(
-        grammar => $parser->grammar,
-        receiver => $parser->receiver,
-    );
-
-}
-
-sub slurp {
-    my $self = shift;
-    my $file = shift;
-    my $fh;
-    if (ref($file)) {
-        $fh = $file;
-    }
-    else {
-        my $path = join '/', $self->base, $file;
-        open $fh, $path
-            or die "Can't open '$path' for input: $!";
-    }
-    local $/;
-    return <$fh>;
 }
 
 1;

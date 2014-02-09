@@ -1,13 +1,21 @@
-use TestML -run, -bridge => 'main';
+use TestML;
+TestML->new(
+    testml => join('', <DATA>),
+)->run;
 
-sub upper {
-    my $self = shift;
-    return uc($self->value);
+{
+    package TestML::Bridge;
+    use TestML::Util;
+    sub upper {
+        my ($self, $string) = @_;
+        return str uc($string->value);
+    }
 }
-__DATA__
-%TestML 1.0
 
-*foo.upper() == *bar;
+__DATA__
+%TestML 0.1.0
+
+*foo.upper() == *bar
 
 === Foo for thought
 --- foo: o hai
