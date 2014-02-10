@@ -23,8 +23,10 @@ my %WriteMakefileArgs = (
   "PREREQ_PM" => {
     "Pegex" => "0.24"
   },
-  "TEST_REQUIRES" => {},
-  "VERSION" => "0.29",
+  "TEST_REQUIRES" => {
+    "Capture::Tiny" => 0
+  },
+  "VERSION" => "0.30",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -32,6 +34,7 @@ my %WriteMakefileArgs = (
 
 
 my %FallbackPrereqs = (
+  "Capture::Tiny" => 0,
   "Pegex" => "0.24"
 );
 

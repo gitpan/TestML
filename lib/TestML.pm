@@ -1,6 +1,6 @@
 # ABSTRACT: A Generic Software Testing Meta Language
 package TestML;
-our $VERSION = '0.29'; # VERSION
+our $VERSION = '0.30'; # VERSION
 
 use TestML::Base;
 
