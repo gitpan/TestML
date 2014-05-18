@@ -21,12 +21,12 @@ my %WriteMakefileArgs = (
   "LICENSE" => "perl",
   "NAME" => "TestML",
   "PREREQ_PM" => {
-    "Pegex" => "0.24"
+    "Pegex" => "0.30"
   },
   "TEST_REQUIRES" => {
     "Capture::Tiny" => 0
   },
-  "VERSION" => "0.30",
+  "VERSION" => "0.31",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -35,7 +35,7 @@ my %WriteMakefileArgs = (
 
 my %FallbackPrereqs = (
   "Capture::Tiny" => 0,
-  "Pegex" => "0.24"
+  "Pegex" => "0.30"
 );
 
 

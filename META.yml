@@ -14,10 +14,10 @@ meta-spec:
   version: '1.4'
 name: TestML
 requires:
-  Pegex: '0.24'
+  Pegex: '0.30'
   perl: v5.8.1
 resources:
   bugtracker: https://github.com/ingydotnet/testml-pm/issues
   homepage: https://github.com/ingydotnet/testml-pm
   repository: https://github.com/ingydotnet/testml-pm.git
-version: '0.30'
+version: '0.31'

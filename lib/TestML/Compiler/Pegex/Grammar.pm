@@ -6,7 +6,13 @@ use constant file => '../testml-pgx/testml.pgx';
 
 sub make_tree {
   {
+    '+grammar' => 'testml',
+    '+include' => 'atom',
     '+toprule' => 'testml_document',
+    '+version' => '0.0.1',
+    '__' => {
+      '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)+/
+    },
     'assertion_call' => {
       '.any' => [
         {
@@ -121,6 +127,9 @@ sub make_tree {
     'blank_line' => {
       '.rgx' => qr/\G[\ \t]*\r?\n/
     },
+    'blanks' => {
+      '.rgx' => qr/\G[\ \t]+/
+    },
     'block_header' => {
       '.all' => [
         {
@@ -130,7 +139,7 @@ sub make_tree {
           '+max' => 1,
           '.all' => [
             {
-              '.rgx' => qr/\G[\ \t]+/
+              '.ref' => 'blanks'
             },
             {
               '.ref' => 'block_label'
@@ -138,7 +147,7 @@ sub make_tree {
           ]
         },
         {
-          '.rgx' => qr/\G[\ \t]*\r?\n/
+          '.ref' => 'blank_line'
         }
       ]
     },
@@ -167,11 +176,24 @@ sub make_tree {
           '.rgx' => qr/\G\((?:[\ \t]|\r?\n|\#.*\r?\n)*/
         },
         {
-          '+min' => 0,
-          '.ref' => 'call_argument',
-          '.sep' => {
-            '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)*,(?:[\ \t]|\r?\n|\#.*\r?\n)*/
-          }
+          '+max' => 1,
+          '.all' => [
+            {
+              '.ref' => 'call_argument'
+            },
+            {
+              '+min' => 0,
+              '-flat' => 1,
+              '.all' => [
+                {
+                  '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)*,(?:[\ \t]|\r?\n|\#.*\r?\n)*/
+                },
+                {
+                  '.ref' => 'call_argument'
+                }
+              ]
+            }
+          ]
         },
         {
           '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)*\)/
@@ -250,7 +272,7 @@ sub make_tree {
       '+min' => 0,
       '.any' => [
         {
-          '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)+/
+          '.ref' => '__'
         },
         {
           '.ref' => 'assignment_statement'
@@ -337,7 +359,7 @@ sub make_tree {
           '+min' => 0,
           '.any' => [
             {
-              '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)+/
+              '.ref' => '__'
             },
             {
               '.ref' => 'assignment_statement'
@@ -373,11 +395,23 @@ sub make_tree {
       '.rgx' => qr/\G([a-zA-Z]\w*)/
     },
     'function_variables' => {
-      '+min' => 1,
-      '.ref' => 'function_variable',
-      '.sep' => {
-        '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)*,(?:[\ \t]|\r?\n|\#.*\r?\n)*/
-      }
+      '.all' => [
+        {
+          '.ref' => 'function_variable'
+        },
+        {
+          '+min' => 0,
+          '-flat' => 1,
+          '.all' => [
+            {
+              '.rgx' => qr/\G(?:[\ \t]|\r?\n|\#.*\r?\n)*,(?:[\ \t]|\r?\n|\#.*\r?\n)*/
+            },
+            {
+              '.ref' => 'function_variable'
+            }
+          ]
+        }
+      ]
     },
     'lines_point' => {
       '.all' => [
@@ -385,13 +419,13 @@ sub make_tree {
           '.ref' => 'point_marker'
         },
         {
-          '.rgx' => qr/\G[\ \t]+/
+          '.ref' => 'blanks'
         },
         {
           '.ref' => 'point_name'
         },
         {
-          '.rgx' => qr/\G[\ \t]*\r?\n/
+          '.ref' => 'blank_line'
         },
         {
           '.ref' => 'point_lines'
@@ -410,7 +444,7 @@ sub make_tree {
           '.ref' => 'point_marker'
         },
         {
-          '.rgx' => qr/\G[\ \t]+/
+          '.ref' => 'blanks'
         },
         {
           '.ref' => 'point_name'
