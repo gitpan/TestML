@@ -1,4 +1,5 @@
 package TestML::Compiler::Pegex;
+$TestML::Compiler::Pegex::VERSION = '0.32';
 use TestML::Base;
 extends 'TestML::Compiler';
 

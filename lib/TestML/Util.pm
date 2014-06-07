@@ -3,7 +3,7 @@ use strict; use warnings;
 use TestML::Runtime;
 
 package TestML::Util;
-
+$TestML::Util::VERSION = '0.32';
 use Exporter 'import';
 our @EXPORT = qw( runtime list str num bool none native );
 

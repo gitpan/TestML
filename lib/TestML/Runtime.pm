@@ -1,4 +1,5 @@
 package TestML::Runtime;
+$TestML::Runtime::VERSION = '0.32';
 use TestML::Base;
 
 has testml => ();
@@ -286,6 +287,7 @@ sub read_testml_file {
 
 #-----------------------------------------------------------------------------
 package TestML::Function;
+$TestML::Function::VERSION = '0.32';
 use TestML::Base;
 
 has type => 'Func';     # Functions are TestML typed objects
@@ -320,6 +322,7 @@ sub forgetvar {
 
 #-----------------------------------------------------------------------------
 package TestML::Assignment;
+$TestML::Assignment::VERSION = '0.32';
 use TestML::Base;
 
 has name => ();
@@ -327,6 +330,8 @@ has expr => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Statement;
+$TestML::Statement::VERSION = '0.32';
+
 use TestML::Base;
 
 has expr => ();
@@ -335,12 +340,16 @@ has points => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Expression;
+$TestML::Expression::VERSION = '0.32';
+
 use TestML::Base;
 
 has calls => [];
 
 #-----------------------------------------------------------------------------
 package TestML::Assertion;
+$TestML::Assertion::VERSION = '0.32';
+
 use TestML::Base;
 
 has name => ();
@@ -348,6 +357,8 @@ has expr => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Call;
+$TestML::Call::VERSION = '0.32';
+
 use TestML::Base;
 
 has name => ();
@@ -355,11 +366,15 @@ has args => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Callable;
+$TestML::Callable::VERSION = '0.32';
+
 use TestML::Base;
 has value => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Block;
+$TestML::Block::VERSION = '0.32';
+
 use TestML::Base;
 
 has label => '';
@@ -367,12 +382,16 @@ has points => {};
 
 #-----------------------------------------------------------------------------
 package TestML::Point;
+$TestML::Point::VERSION = '0.32';
+
 use TestML::Base;
 
 has name => ();
 
 #-----------------------------------------------------------------------------
 package TestML::Object;
+$TestML::Object::VERSION = '0.32';
+
 use TestML::Base;
 
 has value => ();
@@ -391,6 +410,8 @@ sub none { $TestML::Constant::None }
 
 #-----------------------------------------------------------------------------
 package TestML::Str;
+$TestML::Str::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 
@@ -405,6 +426,8 @@ sub list { TestML::List->new(value => [split //, $_[0]->value]) }
 
 #-----------------------------------------------------------------------------
 package TestML::Num;
+$TestML::Num::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 
@@ -419,6 +442,8 @@ sub list {
 
 #-----------------------------------------------------------------------------
 package TestML::Bool;
+$TestML::Bool::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 
@@ -428,6 +453,8 @@ sub bool { $_[0] }
 
 #-----------------------------------------------------------------------------
 package TestML::List;
+$TestML::List::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 has value => [];
@@ -439,6 +466,8 @@ sub push {
 
 #-----------------------------------------------------------------------------
 package TestML::None;
+$TestML::None::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 
@@ -449,16 +478,21 @@ sub list { TestML::List->new(value => []) }
 
 #-----------------------------------------------------------------------------
 package TestML::Native;
+$TestML::Native::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 
 #-----------------------------------------------------------------------------
 package TestML::Error;
+$TestML::Error::VERSION = '0.32';
+
 use TestML::Base;
 extends 'TestML::Object';
 
 #-----------------------------------------------------------------------------
 package TestML::Constant;
+$TestML::Constant::VERSION = '0.32';
 
 our $True = TestML::Bool->new(value => 1);
 our $False = TestML::Bool->new(value => 0);

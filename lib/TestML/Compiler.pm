@@ -1,6 +1,7 @@
 use TestML::Runtime;
 
 package TestML::Compiler;
+$TestML::Compiler::VERSION = '0.32';
 use TestML::Base;
 
 has code => ();

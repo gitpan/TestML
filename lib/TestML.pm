@@ -1,7 +1,5 @@
-# ABSTRACT: A Generic Software Testing Meta Language
 package TestML;
-our $VERSION = '0.31'; # VERSION
-
+$TestML::VERSION = '0.32';
 use TestML::Base;
 
 has runtime => ();

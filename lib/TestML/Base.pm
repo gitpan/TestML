@@ -1,6 +1,5 @@
 package TestML::Base;
-our $VERSION = '0.31'; #VERSION
-
+$TestML::Base::VERSION = '0.32';
 # use Mo qw'build default builder xxx import';
 #   The following line of code was produced from the previous line by
 #   Mo::Inline version 0.38

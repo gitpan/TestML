@@ -1,4 +1,5 @@
 package TestML::Compiler::Pegex::AST;
+$TestML::Compiler::Pegex::AST::VERSION = '0.32';
 use TestML::Base;
 extends 'Pegex::Tree';
 
