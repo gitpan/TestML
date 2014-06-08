@@ -4,13 +4,13 @@ NAME
 SYNOPSIS
         # file t/testml/encode.tml
         %TestML 0.1.0
-    
+
         Title = 'Tests for AcmeEncode'
         Plan = 3
-    
+
         *text.apply_rot13 == *rot13
         *text.apply_md5   == *md5
-    
+
         === Encode some poetry
         --- text
         There once was a fellow named Ingy,
@@ -19,7 +19,7 @@ SYNOPSIS
         Gurer bapr jnf n sryybj anzrq Vatl,
         Pbzovavat ynathntrf gjnf uvf Guvatl.
         --- md5: 7a1538ff9fc8edf8ea55d02d0b0658be
-    
+
         === Encode a password
         --- text: soopersekrit
         --- md5: 64002c26dcc62c1d6d0f1cb908de1435
@@ -34,7 +34,7 @@ SYNOPSIS
 
         use TestML;
         use t::Bridge;
-    
+
         TestML->new(
             testml => 'testml/encode.tml',
             bridge => 't::Bridge',

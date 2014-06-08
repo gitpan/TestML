@@ -10,6 +10,12 @@ See http://github.com/ingydotnet/kwim-pm#readme
 
 TestML::Setup - Generate Test Files for a TestML Suite
 
+=for html
+<a href="https://travis-ci.org/ingydotnet/testml-pm"><img src="https://travis-ci.org/ingydotnet/testml-pm.png" alt="testml-pm"></a>
+
+=for html
+<a href="https://coveralls.io/r/ingydotnet/testml-pm?branch=master"><img src="https://coveralls.io/repos/ingydotnet/testml-pm/badge.png" alt="testml-pm"></a>
+
 =head1 SYNOPSIS
 
     perl -MTestML::Setup -e setup testml.yaml

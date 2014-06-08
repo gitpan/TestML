@@ -1,5 +1,5 @@
 package TestML::Setup;
-$TestML::Setup::VERSION = '0.32';
+$TestML::Setup::VERSION = '0.33';
 use TestML::Base;
 
 use YAML::XS;
