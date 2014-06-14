@@ -1,5 +1,5 @@
 package TestML::Library::Debug;
-$TestML::Library::Debug::VERSION = '0.33';
+$TestML::Library::Debug::VERSION = '0.34';
 use TestML::Base;
 extends 'TestML::Library';
 

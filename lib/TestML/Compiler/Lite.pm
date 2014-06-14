@@ -1,5 +1,5 @@
 package TestML::Compiler::Lite;
-$TestML::Compiler::Lite::VERSION = '0.33';
+$TestML::Compiler::Lite::VERSION = '0.34';
 use TestML::Base;
 extends 'TestML::Compiler';
 

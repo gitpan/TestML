@@ -1,6 +1,6 @@
 # XXX This module should be deprecated or at least moved to a separate dist.
 package Module::Install::TestML;
-$Module::Install::TestML::VERSION = '0.33';
+$Module::Install::TestML::VERSION = '0.34';
 use strict;
 use warnings;
 

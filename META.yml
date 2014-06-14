@@ -25,4 +25,4 @@ resources:
   bugtracker: https://github.com/ingydotnet/testml-pm/issues
   homepage: https://github.com/ingydotnet/testml-pm
   repository: https://github.com/ingydotnet/testml-pm.git
-version: '0.33'
+version: '0.34'
