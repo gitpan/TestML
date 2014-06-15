@@ -2,7 +2,7 @@ use Test::Builder;
 use TestML::Runtime;
 
 package TestML::Runtime::TAP;
-$TestML::Runtime::TAP::VERSION = '0.34';
+$TestML::Runtime::TAP::VERSION = '0.35';
 use TestML::Base;
 extends 'TestML::Runtime';
 

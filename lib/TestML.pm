@@ -1,5 +1,5 @@
 package TestML;
-$TestML::VERSION = '0.34';
+$TestML::VERSION = '0.35';
 use TestML::Base;
 
 has runtime => ();
