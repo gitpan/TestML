@@ -18,6 +18,7 @@ no_index:
     - inc
     - t
     - xt
+    - example
 requires:
   Pegex: '0.30'
   perl: v5.8.1
@@ -25,4 +26,4 @@ resources:
   bugtracker: https://github.com/ingydotnet/testml-pm/issues
   homepage: https://github.com/ingydotnet/testml-pm
   repository: https://github.com/ingydotnet/testml-pm.git
-version: '0.35'
+version: '0.36'
