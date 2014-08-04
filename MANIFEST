@@ -8,6 +8,7 @@ META.yml
 Makefile.PL
 README
 lib/Module/Install/TestML.pm
+lib/Module/Install/TestML.pod
 lib/TestML.pm
 lib/TestML.pod
 lib/TestML/Base.pm
