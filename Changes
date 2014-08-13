@@ -1,3 +1,6 @@
+0.44 Wed Aug 13 16:27:24 PDT 2014
+ - Fixd issue/4, proper ONLY handling
+
 0.43 Sat Aug  9 00:25:05 PDT 2014
  - Fix swim errors
 
