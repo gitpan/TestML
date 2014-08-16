@@ -26,6 +26,7 @@ lib/TestML/Runtime/TAP.pm
 lib/TestML/Setup.pm
 lib/TestML/Setup.pod
 lib/TestML/Util.pm
+t/000-compile-modules.t
 t/TestMLBridge.pm
 t/ast/arguments.tml
 t/ast/assertions.tml
