@@ -7,13 +7,18 @@ use 5.008001;
 
 use ExtUtils::MakeMaker 6.30;
 
+use File::ShareDir::Install;
+$File::ShareDir::Install::INCLUDE_DOTFILES = 1;
+$File::ShareDir::Install::INCLUDE_DOTDIRS = 1;
+install_share dist => "share";
 
 
 my %WriteMakefileArgs = (
   "ABSTRACT" => "A Generic Software Testing Meta Language",
   "AUTHOR" => "Ingy d\x{f6}t Net <ingy\@cpan.org>",
   "CONFIGURE_REQUIRES" => {
-    "ExtUtils::MakeMaker" => "6.30"
+    "ExtUtils::MakeMaker" => "6.30",
+    "File::ShareDir::Install" => "0.06"
   },
   "DISTNAME" => "TestML",
   "EXE_FILES" => [],
@@ -25,7 +30,7 @@ my %WriteMakefileArgs = (
   "TEST_REQUIRES" => {
     "Capture::Tiny" => 0
   },
-  "VERSION" => "0.49",
+  "VERSION" => "0.50",
   "test" => {
     "TESTS" => "t/*.t"
   }
@@ -49,5 +54,10 @@ delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
 
 WriteMakefile(%WriteMakefileArgs);
 
+{
+package
+MY;
+use File::ShareDir::Install qw(postamble);
+}
 
 
