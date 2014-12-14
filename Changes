@@ -1,3 +1,6 @@
+0.51 Sun Dec 14 12:53:02 PST 2014
+ - Fix a bug causing 000compile to fail
+
 0.50 Fri Dec 12 10:52:23 PST 2014
  - Make TestML::Setup more clear
  - Share TestML grammar
