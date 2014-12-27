@@ -1,3 +1,6 @@
+0.52 Sat Dec 27 14:45:50 PST 2014
+ - Fix file path creation issues on MSWin32
+
 0.51 Sun Dec 14 12:53:02 PST 2014
  - Fix a bug causing 000compile to fail
 
